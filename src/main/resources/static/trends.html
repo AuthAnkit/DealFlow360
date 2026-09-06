@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Trends - DealFlow360</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div id="nav"></div>
+<div class="page">
+    <h1>Trends &amp; Analytics</h1>
+    <p class="subtitle">Added feature - pick anything ("some particular thing") and see the last N months of
+        activity as both numbers and a graph, instead of a static one-time report.</p>
+
+    <div id="msg"></div>
+
+    <div class="card">
+        <h2>What do you want to look at?</h2>
+        <div class="grid grid-3">
+            <div>
+                <label>Window</label>
+                <select id="fMonths">
+                    <option value="3">Last 3 months</option>
+                    <option value="6">Last 6 months</option>
+                    <option value="12">Last 12 months</option>
+                    <option value="1">This month only</option>
+                </select>
+            </div>
+            <div>
+                <label>Dimension</label>
+                <select id="fDimension" onchange="onDimensionChange()">
+                    <option value="OVERALL">Overall business</option>
+                    <option value="PRODUCT">A specific product</option>
+                    <option value="CATEGORY">A specific category</option>
+                    <option value="SALES_REP">A specific sales rep</option>
+                </select>
+            </div>
+            <div id="dimensionValueWrap" style="display:none">
+                <label id="dimensionValueLabel">Value</label>
+                <select id="fDimensionValue"></select>
+            </div>
+        </div>
+        <button class="btn-primary" style="margin-top:14px" onclick="runTrends()">Show trend</button>
+    </div>
+
+    <div class="grid grid-3" id="kpis"></div>
+
+    <div class="card">
+        <div class="flex-between">
+            <h2 class="mt-0">Revenue &amp; average discount by month</h2>
+            <span id="momentum" class="muted"></span>
+        </div>
+        <div id="chart"></div>
+    </div>
+
+    <div class="card">
+        <h2>Monthly breakdown</h2>
+        <table>
+            <thead><tr><th>Month</th><th>Quotations created</th><th>Confirmed</th><th>Units sold</th><th>Revenue</th><th>Avg. discount</th></tr></thead>
+            <tbody id="rows"><tr><td colspan="6" class="empty">Choose a dimension and click "Show trend".</td></tr></tbody>
+        </table>
+    </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+    const user = DF.requireRole(["ADMIN", "SALES_MANAGER", "FINANCE", "SALES_REP"]);
+    DF.renderNav("trends");
+
+    let products = [];
+    let categories = [];
+    let reps = [];
+
+    async function init() {
+        try {
+            products = await DF.get("/api/products");
+            categories = [...new Set(products.map(p => p.category))].sort();
+            try {
+                reps = await DF.get("/api/users/sales-reps");
+            } catch (e) { reps = []; }
+            await runTrends();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    function onDimensionChange() {
+        const dim = document.getElementById("fDimension").value;
+        const wrap = document.getElementById("dimensionValueWrap");
+        const label = document.getElementById("dimensionValueLabel");
+        const select = document.getElementById("fDimensionValue");
+        if (dim === "OVERALL") {
+            wrap.style.display = "none";
+            return;
+        }
+        wrap.style.display = "block";
+        if (dim === "PRODUCT") {
+            label.textContent = "Product";
+            select.innerHTML = products.map(p => `<option value="${p.id}">${DF.escapeHtml(p.name)}</option>`).join("");
+        } else if (dim === "CATEGORY") {
+            label.textContent = "Category";
+            select.innerHTML = categories.map(c => `<option value="${DF.escapeHtml(c)}">${DF.escapeHtml(c)}</option>`).join("");
+        } else if (dim === "SALES_REP") {
+            label.textContent = "Sales rep";
+            select.innerHTML = reps.map(r => `<option value="${r.id}">${DF.escapeHtml(r.fullName)}</option>`).join("");
+        }
+    }
+
+    async function runTrends() {
+        DF.clearMessage("msg");
+        try {
+            const months = document.getElementById("fMonths").value;
+            const dimension = document.getElementById("fDimension").value;
+            const params = new URLSearchParams({ months, dimension });
+            if (dimension === "PRODUCT" || dimension === "SALES_REP") {
+                const val = document.getElementById("fDimensionValue").value;
+                if (val) params.set("dimensionId", val);
+            } else if (dimension === "CATEGORY") {
+                const val = document.getElementById("fDimensionValue").value;
+                if (val) params.set("category", val);
+            }
+
+            const trend = await DF.get("/api/reports/trends?" + params.toString());
+
+            document.getElementById("kpis").innerHTML = `
+                <div class="card kpi"><div class="value">${trend.totalQuotations}</div><div class="label">Quotations - ${DF.escapeHtml(trend.dimensionLabel)}</div></div>
+                <div class="card kpi"><div class="value">${DF.fmtMoney(trend.totalRevenue)}</div><div class="label">Total revenue (${trend.months} mo)</div></div>
+                <div class="card kpi"><div class="value">${trend.totalUnitsSold}</div><div class="label">Units sold</div></div>
+            `;
+
+            const momentumClass = trend.momentum === "UP" ? "momentum-up" : trend.momentum === "DOWN" ? "momentum-down" : "momentum-flat";
+            const arrow = trend.momentum === "UP" ? "↑" : trend.momentum === "DOWN" ? "↓" : "→";
+            document.getElementById("momentum").innerHTML = trend.momentum === "N/A" ? "" :
+                `<span class="${momentumClass}">${arrow} ${trend.momentumPercent}% vs. previous month</span>`;
+
+            DF.renderChart("chart",
+                trend.points.map(p => p.monthLabel),
+                [
+                    { name: "Revenue ($)", type: "bar", color: "#2f6fed", values: trend.points.map(p => Number(p.revenue)) },
+                    { name: "Avg. discount (%)", type: "line", color: "#d64545", values: trend.points.map(p => Number(p.averageDiscountPercent)) }
+                ]
+            );
+
+            document.getElementById("rows").innerHTML = trend.points.map(p => `
+                <tr><td>${DF.escapeHtml(p.monthLabel)}</td><td>${p.quotationsCreated}</td><td>${p.quotationsConfirmed}</td>
+                <td>${p.unitsSold}</td><td>${DF.fmtMoney(p.revenue)}</td><td>${DF.fmtPct(p.averageDiscountPercent)}</td></tr>
+            `).join("");
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    init();
+</script>
+</body>
+</html>

@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Order - Customer Portal</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div id="nav"></div>
+<div class="page">
+    <p class="subtitle" style="margin-bottom:6px"><a href="/portal.html">&larr; My Orders</a></p>
+    <div class="flex-between">
+        <div>
+            <h1 id="title">Order</h1>
+            <p class="subtitle">Placed <span id="placedDate">-</span> &middot; Sales rep <span id="repName">-</span></p>
+        </div>
+        <div class="text-right">
+            <span id="statusBadge" class="badge">-</span>
+            <div class="muted" style="margin-top:6px">Order total: <strong id="totalAmount">-</strong></div>
+        </div>
+    </div>
+
+    <div id="msg"></div>
+
+    <div class="card" id="stepperCard">
+        <div class="stepper" id="stepper"></div>
+    </div>
+
+    <div id="rejectedBanner" class="error-box" style="display:none">
+        This order was not approved at the requested terms. You can propose a lower discount below ("Submit request") -
+        that re-opens the negotiation - or contact your sales rep.
+    </div>
+
+    <div id="pendingBanner" class="card" style="display:none;background:#eef3ff;border-color:#c9d6f5">
+        Your requested terms are with the seller's approvers right now. You can still leave a comment; a new
+        counter-offer or confirmation will be possible once they decide.
+    </div>
+
+    <div id="notReviewedBanner" class="card" style="display:none;background:#fff8ec;border-color:#f0dfb8">
+        Your sales rep hasn't reviewed and submitted this order yet, so it can't be confirmed just yet -
+        feel free to leave a note below in the meantime.
+    </div>
+
+    <div class="grid grid-2">
+        <div class="card">
+            <h2>Items in this order</h2>
+            <div id="items"></div>
+        </div>
+
+        <div>
+            <div class="card">
+                <h2>Order summary</h2>
+                <div id="summary"></div>
+                <button class="btn-success" id="btnConfirm" style="width:100%;margin-top:14px" onclick="confirmQuotation()">Confirm Order</button>
+                <p class="muted" style="font-size:12px;margin-top:10px" id="confirmHint">
+                    If the current terms exceed the seller's approval thresholds, confirming will automatically
+                    send this order back for internal approval instead of finalizing it immediately.
+                </p>
+            </div>
+
+            <div class="card" id="negotiateCard">
+                <h2>Request a change</h2>
+                <label>Comment / question</label>
+                <input id="commentText" placeholder="Ask a question or leave a note">
+                <button class="btn-outline" style="margin-top:10px;width:100%" onclick="sendComment()">Send comment</button>
+
+                <div id="counterWrap">
+                    <label style="margin-top:16px">Counter a discount on an item</label>
+                    <select id="counterLine"></select>
+                    <label>Proposed discount %</label>
+                    <input id="counterDiscount" type="number" step="0.01" min="0" max="100">
+                    <button class="btn-primary" style="margin-top:10px;width:100%" onclick="sendCounter()">Submit request</button>
+                    <p class="muted" style="font-size:12px;margin-top:8px" id="counterHint">
+                        Your proposal is applied to the quotation right away. If it stays within the seller's discount policy you
+                        can confirm immediately; if it goes beyond it, confirming sends the order to the seller's approvers automatically.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Conversation</h2>
+        <div id="thread" class="chat-thread"></div>
+    </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+    const user = DF.requireRole(["CUSTOMER"]);
+    DF.renderNav("portal");
+
+    const params = new URLSearchParams(window.location.search);
+    const quotationId = params.get("id");
+    if (!quotationId) window.location.href = "/portal.html";
+
+    const STEPS = ["Order Placed", "Seller Review", "Confirmed"];
+    let quotation = null;
+
+    function renderStepper(status) {
+        const el = document.getElementById("stepper");
+        if (status === "REJECTED") {
+            el.innerHTML = STEPS.map((label, i) => `
+                <div class="stepper-step ${i === 0 ? "done" : i === 1 ? "rejected" : ""}">
+                    <div class="stepper-line"></div>
+                    <div class="stepper-dot">${i === 1 ? "&times;" : i + 1}</div>
+                    <div class="stepper-label">${i === 1 ? "Not approved" : label}</div>
+                </div>`).join("");
+            document.getElementById("rejectedBanner").style.display = "block";
+            return;
+        }
+        document.getElementById("rejectedBanner").style.display = "none";
+
+        // DRAFT/PENDING_APPROVAL/UNDER_NEGOTIATION -> still on step 2 (seller review);
+        // APPROVED/CONFIRMED -> step 2 done; CONFIRMED -> step 3 done too.
+        const stepIndex = status === "CONFIRMED" ? 2 : (status === "APPROVED" ? 1 : (status === "DRAFT" ? 0 : 1));
+        const isCurrent = status !== "CONFIRMED" && !(status === "APPROVED");
+        el.innerHTML = STEPS.map((label, i) => {
+            let cls = "";
+            if (i < stepIndex) cls = "done";
+            else if (i === stepIndex) cls = isCurrent ? "current" : "done";
+            return `
+                <div class="stepper-step ${cls}">
+                    <div class="stepper-line"></div>
+                    <div class="stepper-dot">${cls === "done" ? "&#10003;" : i + 1}</div>
+                    <div class="stepper-label">${label}</div>
+                </div>`;
+        }).join("");
+    }
+
+    async function load() {
+        try {
+            quotation = await DF.get(`/api/portal/quotations/${quotationId}`);
+            document.getElementById("title").textContent = "Order #" + quotation.id;
+            document.getElementById("placedDate").textContent = DF.fmtDate(quotation.createdAt);
+            document.getElementById("repName").textContent = quotation.salesRepName || "-";
+            document.getElementById("statusBadge").className = DF.badgeClass(quotation.status);
+            document.getElementById("statusBadge").textContent = ({
+                DRAFT: "Being prepared", PENDING_APPROVAL: "Awaiting seller approval", APPROVED: "Approved",
+                UNDER_NEGOTIATION: quotation.currentApprovalStep === "NONE" ? "Awaiting review" : "Under negotiation",
+                CONFIRMED: "Confirmed", REJECTED: "Not approved"
+            })[quotation.status] || quotation.status.replace("_", " ");
+            document.getElementById("totalAmount").textContent = DF.fmtMoney(quotation.totalAmount);
+
+            renderStepper(quotation.status);
+
+            document.getElementById("items").innerHTML = quotation.lines.map(l => {
+                const gross = Number(l.unitPrice) * l.quantity;
+                const discounted = Number(l.discountPercent) > 0;
+                return `
+                <div class="item-row">
+                    ${DF.productThumb(l.productImageUrl, l.category, 48)}
+                    <div class="item-info">
+                        <div class="item-name">${DF.escapeHtml(l.productName)}</div>
+                        <div class="item-meta">${DF.escapeHtml(l.category)} &middot; Qty ${l.quantity} &middot; ${DF.fmtMoney(l.unitPrice)} each${l.lineType === "RECURRING" ? " &middot; Recurring" : ""}</div>
+                    </div>
+                    <div class="item-price">
+                        ${discounted ? `<span class="was">${DF.fmtMoney(gross)}</span>` : ""}
+                        <strong>${DF.fmtMoney(l.lineTotal)}</strong>
+                        ${discounted ? `<div class="muted" style="font-size:12px">${l.discountPercent}% off</div>` : ""}
+                    </div>
+                </div>`;
+            }).join("");
+
+            const subtotal = quotation.lines.reduce((sum, l) => sum + Number(l.unitPrice) * l.quantity, 0);
+            const total = Number(quotation.totalAmount);
+            const totalDiscount = subtotal - total;
+            document.getElementById("summary").innerHTML = `
+                <div class="summary-row"><span class="muted-label">Subtotal</span><span>${DF.fmtMoney(subtotal)}</span></div>
+                <div class="summary-row"><span class="muted-label">Total discount</span><span>${totalDiscount > 0.004 ? "-" + DF.fmtMoney(totalDiscount) : DF.fmtMoney(0)}</span></div>
+                <div class="summary-row total"><span>Order total</span><span>${DF.fmtMoney(total)}</span></div>
+            `;
+
+            document.getElementById("counterLine").innerHTML = quotation.lines.map(l => `<option value="${l.id}">${DF.escapeHtml(l.productName)} (currently ${l.discountPercent}%)</option>`).join("");
+
+            // "Request a change" stays available for anything except a finalized order. The Confirm
+            // button is hidden once an order is REJECTED (the backend refuses to resurrect a
+            // rejection via confirm) and also while the order hasn't been submitted for approval yet
+            // at all (currentApprovalStep === "NONE" - true for a fresh self-service request the rep
+            // hasn't priced/submitted, even though its status can already read UNDER_NEGOTIATION once
+            // its note is posted) - the backend refuses to confirm either case, so don't offer a
+            // button that would just error.
+            const isConfirmed = quotation.status === "CONFIRMED";
+            const isRejected = quotation.status === "REJECTED";
+            const isPending = quotation.status === "PENDING_APPROVAL";
+            const notYetReviewed = !isConfirmed && !isRejected && !isPending && quotation.currentApprovalStep === "NONE";
+            // Confirm only for an approved / negotiated order that has actually been through the seller's
+            // review; a counter-offer only while the deal is open (never while approvers are deciding, never after confirmation).
+            const canConfirm = ["APPROVED", "UNDER_NEGOTIATION"].includes(quotation.status) && quotation.currentApprovalStep !== "NONE";
+            document.getElementById("negotiateCard").style.display = isConfirmed ? "none" : "block";
+            document.getElementById("counterWrap").style.display = isPending ? "none" : "block";
+            document.getElementById("btnConfirm").style.display = canConfirm ? "inline-block" : "none";
+            document.getElementById("confirmHint").style.display = canConfirm ? "block" : "none";
+            document.getElementById("notReviewedBanner").style.display = notYetReviewed ? "block" : "none";
+            document.getElementById("pendingBanner").style.display = isPending ? "block" : "none";
+            if (canConfirm && quotation.needsReapproval) {
+                document.getElementById("confirmHint").textContent = "Your proposed discount is beyond the seller's standard policy - confirming will send this order to their approvers first, and you'll be notified once it's reviewed.";
+            }
+
+            await loadThread();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function loadThread() {
+        const messages = await DF.get(`/api/portal/quotations/${quotationId}/negotiation`);
+        document.getElementById("thread").innerHTML = messages.length ? messages.map(m => {
+            const mine = m.senderType === "CUSTOMER";
+            return `
+            <div class="chat-bubble ${mine ? "from-customer" : "from-rep"}">
+                <div class="chat-meta"><span>${DF.escapeHtml(m.senderName)}</span><span>${DF.fmtDateTime(m.timestamp)}</span></div>
+                ${m.messageType === "COUNTER_DISCOUNT" ? `<div class="chat-counter">Counter-discount: ${m.proposedDiscountPercent}%</div><div></div>` : ""}
+                <div>${DF.escapeHtml(m.content || "")}</div>
+            </div>`;
+        }).join("") : `<div class="empty">No messages yet - ask a question or request a different discount above.</div>`;
+    }
+
+    async function sendComment() {
+        const content = document.getElementById("commentText").value;
+        if (!content.trim()) return;
+        try {
+            await DF.post(`/api/portal/quotations/${quotationId}/negotiate`, { content, messageType: "COMMENT" });
+            document.getElementById("commentText").value = "";
+            await loadThread();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function sendCounter() {
+        DF.clearMessage("msg");
+        try {
+            const lineId = parseInt(document.getElementById("counterLine").value);
+            const raw = document.getElementById("counterDiscount").value;
+            if (raw === "") { DF.showError("msg", new Error("Enter the discount % you would like to propose.")); return; }
+            const discount = parseFloat(raw);
+            if (isNaN(discount) || discount < 0 || discount > 100) { DF.showError("msg", new Error("Discount must be between 0 and 100.")); return; }
+            await DF.post(`/api/portal/quotations/${quotationId}/negotiate`, {
+                content: "Requested discount change to " + discount + "%",
+                messageType: "COUNTER_DISCOUNT",
+                proposedDiscountPercent: discount,
+                quotationLineId: lineId
+            });
+            document.getElementById("counterDiscount").value = "";
+            await load();
+            if (quotation.currentApprovalStep === "NONE") {
+                alert("Your request has been added to this order - your sales rep will review it and submit it for you.");
+            } else if (quotation.needsReapproval) {
+                alert("Your request has been sent to your sales rep. Because it goes beyond the standard discount policy, it will need the seller's approval - you can also click Confirm Order to send it for approval right away.");
+            } else {
+                alert("Your request has been applied to the quotation - you can confirm the order at these terms, or wait for your sales rep to respond.");
+            }
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function confirmQuotation() {
+        if (!confirm("Confirm this order at the current terms?")) return;
+        try {
+            quotation = await DF.post(`/api/portal/quotations/${quotationId}/confirm`);
+            await load();
+            if (quotation.status === "PENDING_APPROVAL") {
+                alert("Your requested terms need seller approval - we'll notify you once it's reviewed.");
+            } else {
+                alert("Order confirmed - thank you!");
+            }
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    load();
+</script>
+</body>
+</html>

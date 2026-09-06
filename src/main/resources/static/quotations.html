@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Quotations - DealFlow360</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div id="nav"></div>
+<div class="page">
+    <div class="flex-between">
+        <div>
+            <h1>Quotations</h1>
+            <p class="subtitle">B1/B2 - Sales workspace: quotation list &amp; pipeline</p>
+        </div>
+    </div>
+
+    <div id="msg"></div>
+
+    <div class="card" id="newQuoteCard">
+        <h2>New quotation</h2>
+        <div class="field-row" style="align-items:flex-end">
+            <div><label>Customer</label><select id="newCustomer"></select></div>
+            <div id="newRepWrap" style="display:none"><label>Owning sales rep</label><select id="newRep"></select></div>
+            <div style="flex:0"><button class="btn-primary" onclick="createQuotation()">Create &amp; open</button></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="flex-between">
+            <h2 class="mt-0">All quotations</h2>
+            <div>
+                <button class="btn-outline btn-sm" onclick="load()" title="Refreshes pricing, stock and approval data from the backend">Reload data</button>
+                <label style="margin:0 0 0 12px;display:inline">Filter by status</label>
+                <select id="statusFilter" onchange="renderRows()" style="width:auto;display:inline-block">
+                    <option value="">All</option>
+                    <option>DRAFT</option><option>PENDING_APPROVAL</option><option>APPROVED</option>
+                    <option>REJECTED</option><option>UNDER_NEGOTIATION</option><option>CONFIRMED</option>
+                </select>
+            </div>
+        </div>
+        <table>
+            <thead><tr><th>Customer</th><th>Tier</th><th>Sales rep</th><th>Status</th><th>Risk score</th><th>Total</th><th>Updated</th><th></th></tr></thead>
+            <tbody id="rows"><tr><td colspan="8" class="empty">Loading...</td></tr></tbody>
+        </table>
+    </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+    const user = DF.requireRole(["ADMIN", "SALES_REP", "SALES_MANAGER", "FINANCE"]);
+    DF.renderNav("quotations");
+    if (!["ADMIN", "SALES_REP", "SALES_MANAGER"].includes(user.role)) document.getElementById("newQuoteCard").style.display = "none";
+
+    let quotations = [];
+
+    async function load() {
+        try {
+            const [q, customers] = await Promise.all([DF.get("/api/quotations"), DF.get("/api/customers")]);
+            quotations = q;
+            document.getElementById("newCustomer").innerHTML = customers.map(c => `<option value="${c.id}">${DF.escapeHtml(c.name)} (${c.tier})</option>`).join("");
+            // Managers / Admins can open a deal for one of their reps (or keep it themselves).
+            if (["ADMIN", "SALES_MANAGER"].includes(user.role)) {
+                const reps = await DF.get("/api/users/sales-reps");
+                document.getElementById("newRep").innerHTML = `<option value="">Myself (${DF.escapeHtml(user.fullName)})</option>` +
+                    reps.filter(r => r.active !== false).map(r => `<option value="${DF.escapeHtml(r.username)}">${DF.escapeHtml(r.fullName)}</option>`).join("");
+                document.getElementById("newRepWrap").style.display = "block";
+            }
+            renderRows();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    function renderRows() {
+        const filter = document.getElementById("statusFilter").value;
+        const list = filter ? quotations.filter(q => q.status === filter) : quotations;
+        const rows = document.getElementById("rows");
+        if (list.length === 0) { rows.innerHTML = `<tr><td colspan="8" class="empty">No quotations.</td></tr>`; return; }
+
+        rows.innerHTML = list.slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)).map(q => `
+            <tr style="cursor:pointer" onclick="window.location='/quotation-detail.html?id=${q.id}'">
+                <td>${DF.escapeHtml(q.customerName)}</td>
+                <td><span class="badge">${q.customerTier}</span></td>
+                <td>${DF.escapeHtml(q.salesRepName)}</td>
+                <td><span class="${DF.badgeClass(q.status)}">${q.status.replace("_", " ")}</span></td>
+                <td>${q.blendedRiskScore}</td>
+                <td>${DF.fmtMoney(q.totalAmount)}</td>
+                <td>${DF.fmtDateTime(q.updatedAt)}</td>
+                <td><a href="/quotation-detail.html?id=${q.id}">Open &rarr;</a></td>
+            </tr>
+        `).join("");
+    }
+
+    async function createQuotation() {
+        DF.clearMessage("msg");
+        try {
+            const customerId = document.getElementById("newCustomer").value;
+            const repSelect = document.getElementById("newRep");
+            const salesRepUsername = repSelect && repSelect.value ? repSelect.value : null;
+            const created = await DF.post("/api/quotations", { customerId: parseInt(customerId), salesRepUsername });
+            window.location.href = "/quotation-detail.html?id=" + created.id;
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    load();
+</script>
+</body>
+</html>

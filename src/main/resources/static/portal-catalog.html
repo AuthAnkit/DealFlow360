@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Browse &amp; Request - Customer Portal</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div id="nav"></div>
+<div class="page">
+    <div class="ecom-banner">
+        <h1>Browse &amp; Request</h1>
+        <p class="subtitle">Pick the products you need, build your list, and send it straight to your sales rep - no email back-and-forth.</p>
+    </div>
+
+    <div id="msg"></div>
+
+    <div class="category-pills" id="categoryPills"></div>
+
+    <div class="grid" style="grid-template-columns: 1fr 340px; align-items: flex-start" id="layout">
+        <div class="grid grid-4" id="catalog"></div>
+
+        <div class="card cart-panel">
+            <h2>Your list <span class="muted" id="cartCount" style="font-weight:400"></span></h2>
+            <div id="cartLines"><div class="empty">Nothing added yet - pick products on the left.</div></div>
+            <div class="summary-row total" id="cartTotalRow" style="margin-top:10px;display:none"></div>
+
+            <label style="margin-top:14px">Note for your sales rep (optional)</label>
+            <input id="cartNote" placeholder="e.g. need this by Friday">
+
+            <button class="btn-success" id="btnSubmit" style="width:100%;margin-top:12px" onclick="submitRequest()" disabled>Submit request</button>
+            <p class="muted" style="font-size:12px;margin-top:10px">
+                This creates a new order from your list. Your sales rep will review pricing and get back to you -
+                you'll see it appear under "My Orders".
+            </p>
+        </div>
+    </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+    const user = DF.requireRole(["CUSTOMER"]);
+    DF.renderNav("portal-catalog");
+
+    let products = [];
+    let activeCategory = "ALL";
+    const cart = {}; // productId -> { product, quantity }
+
+    async function load() {
+        try {
+            products = await DF.get("/api/portal/products");
+            renderCategoryPills();
+            renderCatalog();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    function renderCategoryPills() {
+        const categories = ["ALL", ...new Set(products.map(p => p.category).filter(Boolean))];
+        document.getElementById("categoryPills").innerHTML = categories.map(c => `
+            <button class="${c === activeCategory ? "active" : ""}" onclick="setCategory('${c.replace(/'/g, "")}')">${DF.escapeHtml(c === "ALL" ? "All products" : c)}</button>
+        `).join("");
+    }
+
+    function setCategory(c) {
+        activeCategory = c;
+        renderCategoryPills();
+        renderCatalog();
+    }
+
+    function renderCatalog() {
+        const visible = activeCategory === "ALL" ? products : products.filter(p => p.category === activeCategory);
+        const el = document.getElementById("catalog");
+        if (!visible.length) { el.innerHTML = `<div class="card"><div class="empty">No products in this category.</div></div>`; return; }
+        el.innerHTML = visible.map(p => `
+            <div class="card product-card">
+                ${DF.productThumb(p.imageUrl, p.category, 120)}
+                <div class="product-name">${DF.escapeHtml(p.name)}</div>
+                <div class="product-desc">${DF.escapeHtml(p.description || "")}</div>
+                ${(p.plans && p.plans.length) ? `
+                <div class="product-price">${DF.fmtMoney(p.plans[0].pricePerCycle)} <span class="unit">/ ${cycleLabel(p.plans[0].billingCycle)} per ${DF.escapeHtml(p.unit || "seat")}${Number(p.taxPercent) > 0 ? " + " + p.taxPercent + "% tax" : ""}</span></div>
+                <label style="font-size:12px;margin-top:4px">Subscription plan</label>
+                <select id="plan-${p.id}" onchange="renderCatalog()">
+                    ${p.plans.map(pl => `<option value="${pl.id}">${DF.escapeHtml(pl.name)} - ${DF.fmtMoney(pl.pricePerCycle)} / ${cycleLabel(pl.billingCycle)}</option>`).join("")}
+                </select>` : `
+                <div class="product-price">${DF.fmtMoney(p.price)} <span class="unit">/ ${DF.escapeHtml(p.unit || "unit")}${Number(p.taxPercent) > 0 ? " + " + p.taxPercent + "% tax" : ""}</span></div>`}
+                <div class="add-row">
+                    <input type="number" min="1" value="1" id="qty-${p.id}">
+                    <button class="btn-primary" onclick="addToCart(${p.id})">Add to list</button>
+                </div>
+            </div>
+        `).join("");
+    }
+
+    function cycleLabel(cycle) {
+        return { MONTHLY: "month", QUARTERLY: "quarter", YEARLY: "year" }[cycle] || String(cycle || "").toLowerCase();
+    }
+
+    // Subscription products (PDF A5) carry the chosen plan; their line price is the plan's price per cycle.
+    function addToCart(productId) {
+        const product = products.find(p => p.id === productId);
+        if (!product) return;
+        const qtyInput = document.getElementById("qty-" + productId);
+        const quantity = Math.max(1, parseInt(qtyInput.value || "1"));
+        let plan = null;
+        if (product.plans && product.plans.length) {
+            const planSelect = document.getElementById("plan-" + productId);
+            const planId = planSelect ? parseInt(planSelect.value) : product.plans[0].id;
+            plan = product.plans.find(pl => pl.id === planId) || product.plans[0];
+        }
+        if (cart[productId]) {
+            cart[productId].quantity += quantity;
+            cart[productId].plan = plan;
+        } else {
+            cart[productId] = { product, quantity, plan };
+        }
+        qtyInput.value = "1";
+        renderCart();
+    }
+
+    function linePrice(item) {
+        return item.plan ? Number(item.plan.pricePerCycle) : Number(item.product.price);
+    }
+
+    function updateCartQty(productId, quantity) {
+        quantity = Math.max(1, parseInt(quantity || "1"));
+        if (cart[productId]) cart[productId].quantity = quantity;
+        renderCart();
+    }
+
+    function removeFromCart(productId) {
+        delete cart[productId];
+        renderCart();
+    }
+
+    function renderCart() {
+        const items = Object.values(cart);
+        const countEl = document.getElementById("cartCount");
+        const linesEl = document.getElementById("cartLines");
+        const totalRow = document.getElementById("cartTotalRow");
+        const submitBtn = document.getElementById("btnSubmit");
+
+        countEl.textContent = items.length ? `(${items.length})` : "";
+
+        if (!items.length) {
+            linesEl.innerHTML = `<div class="empty">Nothing added yet - pick products on the left.</div>`;
+            totalRow.style.display = "none";
+            submitBtn.disabled = true;
+            return;
+        }
+
+        linesEl.innerHTML = items.map(item => `
+            <div class="cart-line">
+                <div class="cart-line-info">
+                    <div class="cart-line-name">${DF.escapeHtml(item.product.name)}${item.plan ? `<div class="muted" style="font-size:11px">${DF.escapeHtml(item.plan.name)} - billed per ${cycleLabel(item.plan.billingCycle)}</div>` : ""}</div>
+                    <div class="cart-line-qty">
+                        <input type="number" min="1" value="${item.quantity}" onchange="updateCartQty(${item.product.id}, this.value)">
+                        <button class="btn-outline btn-sm" onclick="removeFromCart(${item.product.id})">Remove</button>
+                    </div>
+                </div>
+                <div class="cart-line-price">${DF.fmtMoney(linePrice(item) * item.quantity)}${item.plan ? `<div class="muted" style="font-size:11px">/ ${cycleLabel(item.plan.billingCycle)}</div>` : ""}</div>
+            </div>
+        `).join("");
+
+        const total = items.reduce((sum, item) => sum + linePrice(item) * item.quantity, 0);
+        totalRow.style.display = "flex";
+        totalRow.innerHTML = `<span>Estimated total</span><span>${DF.fmtMoney(total)}</span>`;
+        submitBtn.disabled = false;
+    }
+
+    async function submitRequest() {
+        const items = Object.values(cart).map(item => ({ productId: item.product.id, quantity: item.quantity, subscriptionPlanId: item.plan ? item.plan.id : null }));
+        if (!items.length) return;
+        const submitBtn = document.getElementById("btnSubmit");
+        submitBtn.disabled = true;
+        DF.clearMessage("msg");
+        try {
+            const quotation = await DF.post("/api/portal/quotations", {
+                items,
+                note: document.getElementById("cartNote").value
+            });
+            window.location.href = "/portal-quotation.html?id=" + quotation.id;
+        } catch (e) {
+            DF.showError("msg", e);
+            submitBtn.disabled = false;
+        }
+    }
+
+    load();
+</script>
+</body>
+</html>

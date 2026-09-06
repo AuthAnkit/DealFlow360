@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Recommendation Rules - DealFlow360</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        .rule-inactive td { color: #9aa0a8; }
+        .type-help { font-size: 12px; color: #565c66; margin-top: 4px; }
+    </style>
+</head>
+<body>
+<div id="nav"></div>
+<div class="page">
+    <h1>Backend Setup</h1>
+    <p class="subtitle">A6 - Upsell / Cross-Sell / Product Upgrade rules that drive the live Smart Recommendations panel</p>
+
+    <div class="subnav">
+        <a href="/admin-products.html">Products</a>
+        <a href="/admin-warehouses.html">Warehouses &amp; Stock</a>
+        <a href="/admin-discounts.html">Discount &amp; Approval Chain</a>
+        <a href="/admin-subscriptions.html">Subscription Plans</a>
+        <a href="/admin-upsell.html" class="active">Recommendation Rules</a>
+        <a href="/admin-customers.html">Customers</a>
+        <a href="/admin-users.html">Staff Users</a>
+    </div>
+
+    <div id="msg"></div>
+
+    <div class="card" id="formCard">
+        <h2 id="formTitle">Add recommendation rule</h2>
+        <div class="grid grid-3">
+            <div><label>When the quotation contains (source)</label><select id="uBase" onchange="onTypeChange()"></select></div>
+            <div><label>Recommend</label><select id="uSuggested" onchange="onTypeChange()"></select></div>
+            <div><label>Recommendation type</label>
+                <select id="uType" onchange="onTypeChange()">
+                    <option value="CROSS_SELL">CROSS_SELL - add a related product alongside</option>
+                    <option value="UPSELL">UPSELL - add a premium / higher-value offering</option>
+                    <option value="PRODUCT_UPGRADE">PRODUCT_UPGRADE - replace the line with a premium version</option>
+                </select>
+                <div class="type-help" id="typeHelp"></div>
+            </div>
+            <div><label>Priority (0-100, higher ranks first)</label><input id="uPriority" type="number" min="0" max="100" value="50"></div>
+            <div><label>Minimum margin threshold % (recommended product)</label><input id="uThreshold" type="number" step="0.01" min="0" max="100" value="0"></div>
+            <div><label>Promotion tag <span class="muted">(optional badge)</span></label><input id="uTag" placeholder="e.g. Recommended Upgrade, Bundle offer"></div>
+        </div>
+        <label>Reason / benefits shown to the sales rep</label>
+        <input id="uReason" placeholder="e.g. More RAM, faster processor, more storage">
+        <div class="flex gap-8" style="margin-top:10px;flex-wrap:wrap">
+            <label><input type="checkbox" id="uPromoted" style="width:auto;display:inline-block"> Currently promoted (+20 rank points)</label>
+            <label><input type="checkbox" id="uActive" style="width:auto;display:inline-block" checked> Active</label>
+        </div>
+        <div class="flex gap-8" style="margin-top:14px">
+            <button class="btn-primary" id="btnSave" onclick="saveRule()">Add rule</button>
+            <button class="btn-outline" id="btnCancelEdit" style="display:none" onclick="resetForm()">Cancel edit</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="flex-between">
+            <h2 class="mt-0">Recommendation rules</h2>
+            <div>
+                <label style="margin:0;display:inline">Type</label>
+                <select id="filterType" onchange="renderRows()" style="width:auto;display:inline-block">
+                    <option value="">All</option><option>CROSS_SELL</option><option>UPSELL</option><option>PRODUCT_UPGRADE</option>
+                </select>
+            </div>
+        </div>
+        <table>
+            <thead><tr><th>Type</th><th>Source</th><th>Recommends</th><th>Priority</th><th>Min margin %</th><th>Tag</th><th>Reason</th><th>Status</th><th></th></tr></thead>
+            <tbody id="rows"><tr><td colspan="9" class="empty">Loading...</td></tr></tbody>
+        </table>
+    </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+    const user = DF.requireRole(["ADMIN", "SALES_MANAGER", "FINANCE"]);
+    DF.renderNav("admin");
+    const canEdit = ["ADMIN", "SALES_MANAGER"].includes(user.role);
+    if (!canEdit) document.getElementById("formCard").style.display = "none";
+
+    let rules = [];
+    let products = [];
+    let editingId = null;
+
+    const TYPE_HELP = {
+        CROSS_SELL: "Accepting ADDS the recommended product; the source product stays (Laptop + Mouse).",
+        UPSELL: "Accepting ADDS the premium offering; if it is a pricier product of the same category the rep can also apply it as an in-place upgrade.",
+        PRODUCT_UPGRADE: "Accepting REPLACES the source line with the premium product, keeping the quantity (10 x Laptop Basic -> 10 x Laptop Pro). The recommended product must be priced above the source."
+    };
+
+    function onTypeChange() {
+        const type = document.getElementById("uType").value;
+        let help = TYPE_HELP[type];
+        const base = products.find(p => p.id === parseInt(document.getElementById("uBase").value));
+        const sug = products.find(p => p.id === parseInt(document.getElementById("uSuggested").value));
+        if (type === "PRODUCT_UPGRADE" && base && sug && Number(sug.price) <= Number(base.price)) {
+            help += ` Warning: ${sug.name} (${DF.fmtMoney(sug.price)}) is not more expensive than ${base.name} (${DF.fmtMoney(base.price)}) - this rule will be rejected.`;
+        }
+        if (sug) help += ` ${sug.name} margin: ${(((sug.price - sug.cost) / (sug.price || 1)) * 100).toFixed(1)}%.`;
+        document.getElementById("typeHelp").textContent = help;
+    }
+
+    async function load() {
+        try {
+            [rules, products] = await Promise.all([DF.get("/api/upsell-rules"), DF.get("/api/products")]);
+            const opts = products.map(p => `<option value="${p.id}">${DF.escapeHtml(p.name)} (${DF.escapeHtml(p.category)}, ${DF.fmtMoney(p.price)})${p.active === false ? " - inactive" : ""}</option>`).join("");
+            document.getElementById("uBase").innerHTML = opts;
+            document.getElementById("uSuggested").innerHTML = opts;
+            onTypeChange();
+            renderRows();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    function renderRows() {
+        const filter = document.getElementById("filterType").value;
+        const list = rules.filter(r => !filter || r.recommendationType === filter)
+            .sort((a, b) => (b.active - a.active) || a.recommendationType.localeCompare(b.recommendationType) || b.priority - a.priority);
+        const badge = { CROSS_SELL: "badge-approved", UPSELL: "badge-pending", PRODUCT_UPGRADE: "badge-under-negotiation" };
+        document.getElementById("rows").innerHTML = list.length ? list.map(r => `
+            <tr class="${r.active ? "" : "rule-inactive"}">
+                <td><span class="badge ${badge[r.recommendationType] || ""}">${r.recommendationType.replace("_", " ")}</span></td>
+                <td>${DF.escapeHtml(r.baseProductName)}<div class="muted" style="font-size:11px">${DF.fmtMoney(r.baseProductPrice)}</div></td>
+                <td>${DF.escapeHtml(r.suggestedProductName)}<div class="muted" style="font-size:11px">${DF.fmtMoney(r.suggestedProductPrice)} &middot; margin ${r.suggestedProductMarginPercent}%</div></td>
+                <td>${r.priority}${r.promoted ? ' <span class="badge badge-automated">promoted</span>' : ""}</td>
+                <td>${r.minMarginThreshold}%</td>
+                <td>${DF.escapeHtml(r.promotionTag || "")}</td>
+                <td style="font-size:12px;max-width:260px">${DF.escapeHtml(r.reason || "")}${r.warning ? `<div style="color:#af2b2b">${DF.escapeHtml(r.warning)}</div>` : ""}</td>
+                <td>${r.active ? '<span class="badge badge-approved">Active</span>' : '<span class="badge badge-rejected">Inactive</span>'}</td>
+                <td style="white-space:nowrap">${canEdit ? `
+                    <button class="btn-outline btn-sm" onclick="editRule(${r.id})">Edit</button>
+                    <button class="btn-outline btn-sm" onclick="toggleRule(${r.id}, ${!r.active})">${r.active ? "Deactivate" : "Activate"}</button>
+                    ${user.role === "ADMIN" ? `<button class="btn-outline btn-sm" onclick="removeRule(${r.id})">Delete</button>` : ""}
+                ` : ""}</td>
+            </tr>
+        `).join("") : `<tr><td colspan="9" class="empty">No recommendation rules yet.</td></tr>`;
+    }
+
+    function formBody() {
+        return {
+            baseProductId: parseInt(document.getElementById("uBase").value),
+            suggestedProductId: parseInt(document.getElementById("uSuggested").value),
+            recommendationType: document.getElementById("uType").value,
+            priority: parseInt(document.getElementById("uPriority").value || "50"),
+            minMarginThreshold: parseFloat(document.getElementById("uThreshold").value || "0"),
+            promotionTag: document.getElementById("uTag").value,
+            reason: document.getElementById("uReason").value,
+            promoted: document.getElementById("uPromoted").checked,
+            active: document.getElementById("uActive").checked
+        };
+    }
+
+    async function saveRule() {
+        DF.clearMessage("msg");
+        try {
+            if (editingId) await DF.put("/api/upsell-rules/" + editingId, formBody());
+            else await DF.post("/api/upsell-rules", formBody());
+            resetForm();
+            load();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    function editRule(id) {
+        const r = rules.find(x => x.id === id);
+        if (!r) return;
+        editingId = id;
+        document.getElementById("uBase").value = r.baseProductId;
+        document.getElementById("uSuggested").value = r.suggestedProductId;
+        document.getElementById("uType").value = r.recommendationType;
+        document.getElementById("uPriority").value = r.priority;
+        document.getElementById("uThreshold").value = r.minMarginThreshold;
+        document.getElementById("uTag").value = r.promotionTag || "";
+        document.getElementById("uReason").value = r.reason || "";
+        document.getElementById("uPromoted").checked = r.promoted;
+        document.getElementById("uActive").checked = r.active;
+        document.getElementById("formTitle").textContent = "Edit rule #" + id;
+        document.getElementById("btnSave").textContent = "Save changes";
+        document.getElementById("btnCancelEdit").style.display = "inline-block";
+        onTypeChange();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function resetForm() {
+        editingId = null;
+        document.getElementById("uPriority").value = 50;
+        document.getElementById("uThreshold").value = 0;
+        document.getElementById("uTag").value = "";
+        document.getElementById("uReason").value = "";
+        document.getElementById("uPromoted").checked = false;
+        document.getElementById("uActive").checked = true;
+        document.getElementById("formTitle").textContent = "Add recommendation rule";
+        document.getElementById("btnSave").textContent = "Add rule";
+        document.getElementById("btnCancelEdit").style.display = "none";
+        onTypeChange();
+    }
+
+    async function toggleRule(id, active) {
+        try { await DF.post(`/api/upsell-rules/${id}/${active ? "activate" : "deactivate"}`); load(); }
+        catch (e) { DF.showError("msg", e); }
+    }
+
+    async function removeRule(id) {
+        if (!confirm("Delete this rule permanently? (Deactivate keeps it for later.)")) return;
+        try { await DF.del("/api/upsell-rules/" + id); load(); } catch (e) { DF.showError("msg", e); }
+    }
+
+    load();
+</script>
+</body>
+</html>

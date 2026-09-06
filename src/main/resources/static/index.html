@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DealFlow360 - Sign in</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        /* Login-only backdrop: same brand navy as the app's nav bar (#14213d), so
+           it reads as "this app", not a generic form on a white page - but the
+           login card itself stays on the same plain white .card the rest of the
+           app uses, so nothing about the design language actually changes. */
+        body {
+            min-height: 100vh;
+            background: radial-gradient(circle at top left, #1e2c52, #14213d 55%, #0d1730);
+            background-attachment: fixed;
+        }
+        .page-narrow { padding-top: 64px; }
+        .login-card h1 { color: #fff; }
+        .login-card > .subtitle { color: #c7d2f0; }
+    </style>
+</head>
+<body>
+<div class="page-narrow">
+    <div class="login-card">
+        <h1 style="text-align:center">DealFlow360</h1>
+        <p class="subtitle" style="text-align:center">Intelligent, Self-Governing Sales Operations Platform</p>
+
+        <div class="card">
+            <div class="login-tabs">
+                <button id="tabStaff" class="active" onclick="showTab('staff')">Internal Staff</button>
+                <button id="tabPortal" onclick="showTab('portal')">Customer Portal</button>
+            </div>
+
+            <form id="loginForm" onsubmit="return doLogin(event)">
+                <label for="username">Username</label>
+                <input id="username" autocomplete="username" required>
+                <label for="password">Password</label>
+                <input id="password" type="password" autocomplete="current-password" required>
+                <div id="err" class="error-box" style="display:none"></div>
+                <button type="submit" class="btn-primary" style="width:100%;margin-top:16px">Sign in</button>
+            </form>
+            <p class="muted" id="signupPrompt" style="text-align:center;margin:14px 0 0">
+                New sales rep? <a href="#" onclick="toggleSignup(true); return false;">Create an account</a>
+            </p>
+
+            <form id="signupForm" onsubmit="return doSignup(event)" style="display:none;margin-top:6px">
+                <h3 style="margin-top:0">Sales rep sign-up</h3>
+                <label for="suName">Full name</label>
+                <input id="suName" required>
+                <label for="suEmail">Email</label>
+                <input id="suEmail" type="email">
+                <label for="suUser">Username</label>
+                <input id="suUser" autocomplete="username" required minlength="3">
+                <label for="suPass">Password <span class="muted">(min 6 characters)</span></label>
+                <input id="suPass" type="password" autocomplete="new-password" required minlength="6">
+                <div id="suErr" class="error-box" style="display:none"></div>
+                <button type="submit" class="btn-primary" style="width:100%;margin-top:16px">Create account &amp; sign in</button>
+                <p class="muted" style="text-align:center;margin:12px 0 0">
+                    Self-registered accounts are Sales Reps; an Admin can change the role later.
+                    <a href="#" onclick="toggleSignup(false); return false;">Back to sign in</a>
+                </p>
+            </form>
+        </div>
+
+        <div class="card card-tight" id="demoCreds">
+            <h3>Demo logins (seeded on first run)</h3>
+            <div id="credsStaff">
+                <table>
+                    <tr><td>Admin</td><td><code>admin / admin123</code></td></tr>
+                    <tr><td>Sales Manager</td><td><code>manager / manager123</code></td></tr>
+                    <tr><td>Finance</td><td><code>finance / finance123</code></td></tr>
+                    <tr><td>Sales Rep</td><td><code>rep1 / rep123</code></td></tr>
+                    <tr><td>Sales Rep</td><td><code>rep2 / rep123</code></td></tr>
+                    <tr><td>Sales Reps (demo set)</td><td><code>rep3 &hellip; rep8 / rep123</code></td></tr>
+                </table>
+            </div>
+            <div id="credsPortal" style="display:none">
+                <table>
+                    <tr><td>Acme Corp (Gold)</td><td><code>acme / acme123</code></td></tr>
+                    <tr><td>Beta Industries (Silver)</td><td><code>beta / beta123</code></td></tr>
+                    <tr><td>Bronze Traders (Bronze)</td><td><code>bronze / bronze123</code></td></tr>
+                    <tr><td>Delta Systems (Silver)</td><td><code>delta / delta123</code></td></tr>
+                    <tr><td>60 demo customers</td><td><code>cust01 &hellip; cust60 / cust123</code></td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+    function showTab(which) {
+        document.getElementById("tabStaff").classList.toggle("active", which === "staff");
+        document.getElementById("tabPortal").classList.toggle("active", which === "portal");
+        document.getElementById("credsStaff").style.display = which === "staff" ? "block" : "none";
+        document.getElementById("credsPortal").style.display = which === "portal" ? "block" : "none";
+        // Sign-up is for internal staff only (PDF A1); customer portal logins are issued by the seller.
+        document.getElementById("signupPrompt").style.display = which === "staff" ? "block" : "none";
+        if (which !== "staff") toggleSignup(false);
+    }
+
+    function toggleSignup(show) {
+        document.getElementById("signupForm").style.display = show ? "block" : "none";
+        document.getElementById("loginForm").style.display = show ? "none" : "block";
+        document.getElementById("signupPrompt").style.display = show ? "none" : "block";
+    }
+
+    async function doSignup(evt) {
+        evt.preventDefault();
+        DF.clearMessage("suErr");
+        const username = document.getElementById("suUser").value.trim();
+        const password = document.getElementById("suPass").value;
+        try {
+            const res = await fetch("/api/auth/signup", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    username, password,
+                    fullName: document.getElementById("suName").value.trim(),
+                    email: document.getElementById("suEmail").value.trim()
+                })
+            });
+            if (!res.ok) {
+                let msg = "Sign-up failed (" + res.status + ")";
+                try { const data = await res.json(); if (data && data.message) msg = data.message; } catch (e) { /* ignore */ }
+                throw new Error(msg);
+            }
+            const user = await DF.tryLogin(username, password);
+            window.location.href = user.role === "CUSTOMER" ? "/portal.html" : "/dashboard.html";
+        } catch (e) {
+            DF.showError("suErr", e);
+        }
+        return false;
+    }
+
+    async function doLogin(evt) {
+        evt.preventDefault();
+        DF.clearMessage("err");
+        const username = document.getElementById("username").value.trim();
+        const password = document.getElementById("password").value;
+        try {
+            const user = await DF.tryLogin(username, password);
+            window.location.href = user.role === "CUSTOMER" ? "/portal.html" : "/dashboard.html";
+        } catch (e) {
+            DF.showError("err", e);
+        }
+        return false;
+    }
+
+    // Already logged in? Skip straight to the right home page.
+    (function () {
+        const user = DF.getUser();
+        if (user && DF.getAuth()) {
+            window.location.href = user.role === "CUSTOMER" ? "/portal.html" : "/dashboard.html";
+        }
+    })();
+</script>
+</body>
+</html>

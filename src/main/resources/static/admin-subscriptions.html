@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Subscription Plans - DealFlow360</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div id="nav"></div>
+<div class="page">
+    <h1>Backend Setup</h1>
+    <p class="subtitle">A5 - Subscription / Recurring Plan Setup</p>
+
+    <div class="subnav">
+        <a href="/admin-products.html">Products</a>
+        <a href="/admin-warehouses.html">Warehouses &amp; Stock</a>
+        <a href="/admin-discounts.html">Discount &amp; Approval Chain</a>
+        <a href="/admin-subscriptions.html" class="active">Subscription Plans</a>
+        <a href="/admin-upsell.html">Recommendation Rules</a>
+        <a href="/admin-customers.html">Customers</a>
+        <a href="/admin-users.html">Staff Users</a>
+    </div>
+
+    <div id="msg"></div>
+
+    <div class="card" id="formCard">
+        <h2>Add subscription plan</h2>
+        <label>Plan name</label><input id="pName">
+        <label>Product</label><select id="pProduct"></select>
+        <div class="field-row">
+            <div><label>Billing cycle</label><select id="pCycle"><option>MONTHLY</option><option>QUARTERLY</option><option>YEARLY</option></select></div>
+            <div><label>Price per cycle (per unit)</label><input id="pPrice" type="number" step="0.01"></div>
+        </div>
+        <label><input type="checkbox" id="pProration" style="width:auto;display:inline-block" checked> Enable mid-cycle proration</label>
+        <label><input type="checkbox" id="pRefund" style="width:auto;display:inline-block" checked> Automatic partial refund / credit note on cancellation</label>
+        <button class="btn-primary" style="margin-top:14px" onclick="createPlan()">Add plan</button>
+    </div>
+
+    <div class="card">
+        <h2>Subscription plans</h2>
+        <table>
+            <thead><tr><th>Plan</th><th>Product</th><th>Cycle</th><th>Price/cycle</th><th>Proration</th><th>Refund on cancel</th><th></th></tr></thead>
+            <tbody id="rows"><tr><td colspan="7" class="empty">Loading...</td></tr></tbody>
+        </table>
+    </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+    const user = DF.requireRole(["ADMIN", "SALES_MANAGER", "FINANCE"]);
+    DF.renderNav("admin");
+    if (user.role !== "ADMIN") document.getElementById("formCard").style.display = "none";
+
+    async function load() {
+        try {
+            const [plans, products] = await Promise.all([DF.get("/api/subscription-plans"), DF.get("/api/products")]);
+
+            document.getElementById("pProduct").innerHTML = products.map(p => `<option value="${p.id}">${DF.escapeHtml(p.name)}</option>`).join("");
+
+            document.getElementById("rows").innerHTML = plans.length ? plans.map(p => `
+                <tr><td>${DF.escapeHtml(p.name)}</td><td>${DF.escapeHtml(p.product.name)}</td><td>${p.billingCycle}</td>
+                <td>${DF.fmtMoney(p.pricePerCycle)}</td><td>${p.prorationEnabled ? "Yes" : "No"}</td><td>${p.partialRefundOnCancel ? "Yes" : "No"}</td>
+                <td>${user.role === "ADMIN" ? `<button class="btn-outline btn-sm" onclick="removePlan(${p.id})">Delete</button>` : ""}</td></tr>
+            `).join("") : `<tr><td colspan="7" class="empty">No subscription plans yet.</td></tr>`;
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function createPlan() {
+        DF.clearMessage("msg");
+        try {
+            await DF.post("/api/subscription-plans", {
+                name: document.getElementById("pName").value,
+                product: { id: parseInt(document.getElementById("pProduct").value) },
+                billingCycle: document.getElementById("pCycle").value,
+                pricePerCycle: parseFloat(document.getElementById("pPrice").value || "0"),
+                prorationEnabled: document.getElementById("pProration").checked,
+                partialRefundOnCancel: document.getElementById("pRefund").checked
+            });
+            document.getElementById("pName").value = "";
+            document.getElementById("pPrice").value = "";
+            load();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function removePlan(id) {
+        if (!confirm("Delete this plan?")) return;
+        try { await DF.del("/api/subscription-plans/" + id); load(); } catch (e) { DF.showError("msg", e); }
+    }
+
+    load();
+</script>
+</body>
+</html>

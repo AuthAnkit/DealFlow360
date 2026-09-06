@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Discount &amp; Approval Chain - DealFlow360</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div id="nav"></div>
+<div class="page">
+    <h1>Backend Setup</h1>
+    <p class="subtitle">A3 - Discount Tier &amp; Approval Chain Setup</p>
+
+    <div class="subnav">
+        <a href="/admin-products.html">Products</a>
+        <a href="/admin-warehouses.html">Warehouses &amp; Stock</a>
+        <a href="/admin-discounts.html" class="active">Discount &amp; Approval Chain</a>
+        <a href="/admin-subscriptions.html">Subscription Plans</a>
+        <a href="/admin-upsell.html">Recommendation Rules</a>
+        <a href="/admin-customers.html">Customers</a>
+        <a href="/admin-users.html">Staff Users</a>
+    </div>
+
+    <div id="msg"></div>
+
+    <div class="info-box">
+        Discount ceilings are per (Customer Tier, Category). Use category <code>DEFAULT</code> as the tier's
+        fallback ceiling. Example already seeded: Gold customers are allowed up to 15% on Hardware but only
+        10% on Service - a quote can be "Gold" and still get flagged if one line breaks its own stricter limit.
+    </div>
+
+    <div class="grid grid-2">
+        <div class="card">
+            <h2>Add discount ceiling</h2>
+            <label>Customer tier</label>
+            <select id="cTier"><option>BRONZE</option><option>SILVER</option><option selected>GOLD</option></select>
+            <label>Category <span class="muted">(or DEFAULT)</span></label>
+            <input id="cCategory" placeholder="Hardware / Service / Subscription / DEFAULT">
+            <label>Max discount %</label>
+            <input id="cMax" type="number" step="0.01">
+            <button class="btn-primary" style="margin-top:14px" onclick="createCeiling()">Save ceiling</button>
+        </div>
+
+        <div class="card">
+            <h2>Add approval chain rule</h2>
+            <p class="muted" style="margin-top:0">A rule applies when the blended risk score falls in [min, max).</p>
+            <div class="field-row">
+                <div><label>Min risk score</label><input id="aMin" type="number" step="0.01" value="0"></div>
+                <div><label>Max risk score (exclusive)</label><input id="aMax" type="number" step="0.01" value="10"></div>
+            </div>
+            <label><input type="checkbox" id="aManager" style="width:auto;display:inline-block" checked> Requires Sales Manager</label>
+            <label><input type="checkbox" id="aFinance" style="width:auto;display:inline-block"> Requires Finance</label>
+            <label>Label</label><input id="aLabel" placeholder="e.g. Sales Manager approval">
+            <button class="btn-primary" style="margin-top:14px" onclick="createRule()">Save rule</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Discount ceilings</h2>
+        <table>
+            <thead><tr><th>Tier</th><th>Category</th><th>Max discount</th><th></th></tr></thead>
+            <tbody id="ceilingRows"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Approval chain (evaluated in order of min risk score)</h2>
+        <table>
+            <thead><tr><th>Risk score range</th><th>Sales Manager</th><th>Finance</th><th>Label</th><th></th></tr></thead>
+            <tbody id="ruleRows"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
+        </table>
+    </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+    const user = DF.requireRole(["ADMIN", "SALES_MANAGER"]);
+    DF.renderNav("admin");
+
+    async function load() {
+        try {
+            const [ceilings, rules] = await Promise.all([
+                DF.get("/api/config/discount-ceilings"), DF.get("/api/config/approval-chain")
+            ]);
+
+            document.getElementById("ceilingRows").innerHTML = ceilings.length ? ceilings.map(c => `
+                <tr><td>${c.tier}</td><td>${DF.escapeHtml(c.category)}</td><td>${c.maxDiscountPercent}%</td>
+                <td><button class="btn-outline btn-sm" onclick="removeCeiling(${c.id})">Delete</button></td></tr>
+            `).join("") : `<tr><td colspan="4" class="empty">No ceilings configured.</td></tr>`;
+
+            document.getElementById("ruleRows").innerHTML = rules.length ? rules.map(r => `
+                <tr><td>${r.minRiskScore} &ndash; ${r.maxRiskScore}</td>
+                <td>${r.requiresManager ? "Yes" : "No"}</td><td>${r.requiresFinance ? "Yes" : "No"}</td>
+                <td>${DF.escapeHtml(r.label || "")}</td>
+                <td><button class="btn-outline btn-sm" onclick="removeRule(${r.id})">Delete</button></td></tr>
+            `).join("") : `<tr><td colspan="5" class="empty">No approval chain configured - nothing will ever require approval.</td></tr>`;
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function createCeiling() {
+        DF.clearMessage("msg");
+        try {
+            await DF.post("/api/config/discount-ceilings", {
+                tier: document.getElementById("cTier").value,
+                category: document.getElementById("cCategory").value,
+                maxDiscountPercent: parseFloat(document.getElementById("cMax").value || "0")
+            });
+            document.getElementById("cCategory").value = "";
+            document.getElementById("cMax").value = "";
+            load();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function removeCeiling(id) {
+        if (!confirm("Delete this ceiling?")) return;
+        try { await DF.del("/api/config/discount-ceilings/" + id); load(); } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function createRule() {
+        DF.clearMessage("msg");
+        try {
+            await DF.post("/api/config/approval-chain", {
+                minRiskScore: parseFloat(document.getElementById("aMin").value || "0"),
+                maxRiskScore: parseFloat(document.getElementById("aMax").value || "0"),
+                requiresManager: document.getElementById("aManager").checked,
+                requiresFinance: document.getElementById("aFinance").checked,
+                label: document.getElementById("aLabel").value
+            });
+            document.getElementById("aLabel").value = "";
+            load();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function removeRule(id) {
+        if (!confirm("Delete this rule?")) return;
+        try { await DF.del("/api/config/approval-chain/" + id); load(); } catch (e) { DF.showError("msg", e); }
+    }
+
+    load();
+</script>
+</body>
+</html>

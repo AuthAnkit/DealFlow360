@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Pipeline - DealFlow360</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        .kanban { display: grid; grid-template-columns: repeat(6, minmax(190px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 8px; }
+        .kanban-col { background: #f3f5f8; border: 1px solid #e3e6eb; border-radius: 10px; padding: 10px; min-height: 240px; }
+        .kanban-col h3 { margin: 0 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #565c66; display: flex; justify-content: space-between; }
+        .kanban-col .col-total { font-size: 12px; color: #8a8f98; margin-bottom: 10px; }
+        .kanban-card { background: #fff; border: 1px solid #e3e6eb; border-radius: 8px; padding: 10px; margin-bottom: 8px; cursor: pointer; transition: box-shadow .15s, transform .15s; }
+        .kanban-card:hover { box-shadow: 0 4px 14px rgba(20, 33, 61, .10); transform: translateY(-1px); }
+        .kanban-card .cust { font-weight: 600; font-size: 14px; }
+        .kanban-card .amt { font-size: 15px; margin: 4px 0; }
+        .kanban-card .meta { font-size: 11px; color: #8a8f98; display: flex; justify-content: space-between; }
+        .kanban-card.risky { border-left: 3px solid #d97706; }
+        .kanban-empty { font-size: 12px; color: #a0a5ad; text-align: center; padding: 20px 4px; }
+    </style>
+</head>
+<body>
+<div id="nav"></div>
+<div class="page">
+    <div class="flex-between">
+        <div>
+            <h1>Deal Pipeline</h1>
+            <p class="subtitle">B2 - Kanban view: every quotation as a card showing customer, amount and stage. Click a card to open the Quotation Builder.</p>
+        </div>
+        <div class="flex gap-8">
+            <button class="btn-outline btn-sm" onclick="load()">Reload data</button>
+            <a class="btn btn-primary" href="/quotations.html" id="newLink">+ New quotation</a>
+        </div>
+    </div>
+
+    <div id="msg"></div>
+    <div class="grid grid-3" id="kpis" style="margin-bottom:16px"></div>
+    <div class="kanban" id="kanban"></div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+    const user = DF.requireRole(["ADMIN", "SALES_REP", "SALES_MANAGER", "FINANCE"]);
+    DF.renderNav("pipeline");
+    if (!["ADMIN", "SALES_REP", "SALES_MANAGER"].includes(user.role)) document.getElementById("newLink").style.display = "none";
+
+    const STAGES = [
+        { key: "DRAFT", label: "Draft" },
+        { key: "PENDING_APPROVAL", label: "Pending approval" },
+        { key: "UNDER_NEGOTIATION", label: "Negotiation" },
+        { key: "APPROVED", label: "Approved" },
+        { key: "CONFIRMED", label: "Confirmed" },
+        { key: "REJECTED", label: "Rejected" }
+    ];
+
+    async function load() {
+        DF.clearMessage("msg");
+        try {
+            const quotations = await DF.get("/api/quotations");
+            const open = quotations.filter(q => !["CONFIRMED", "REJECTED"].includes(q.status));
+            const openValue = open.reduce((s, q) => s + Number(q.totalAmount || 0), 0);
+            const won = quotations.filter(q => q.status === "CONFIRMED").reduce((s, q) => s + Number(q.totalAmount || 0), 0);
+            document.getElementById("kpis").innerHTML = `
+                <div class="card kpi"><div class="value">${open.length}</div><div class="label">Open deals</div></div>
+                <div class="card kpi"><div class="value">${DF.fmtMoney(openValue)}</div><div class="label">Open pipeline value</div></div>
+                <div class="card kpi"><div class="value">${DF.fmtMoney(won)}</div><div class="label">Confirmed order value</div></div>
+            `;
+
+            document.getElementById("kanban").innerHTML = STAGES.map(stage => {
+                const cards = quotations.filter(q => q.status === stage.key)
+                    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+                const total = cards.reduce((s, q) => s + Number(q.totalAmount || 0), 0);
+                return `
+                <div class="kanban-col">
+                    <h3><span>${stage.label}</span><span>${cards.length}</span></h3>
+                    <div class="col-total">${DF.fmtMoney(total)}</div>
+                    ${cards.length ? cards.map(q => `
+                        <div class="kanban-card ${Number(q.blendedRiskScore) > 0 ? "risky" : ""}" onclick="window.location='/quotation-detail.html?id=${q.id}'">
+                            <div class="cust">${DF.escapeHtml(q.customerName)}</div>
+                            <div class="amt">${DF.fmtMoney(q.totalAmount)}</div>
+                            <div class="meta"><span>#${q.id} &middot; ${q.customerTier}</span><span>${DF.escapeHtml(q.salesRepName)}</span></div>
+                            <div class="meta" style="margin-top:4px"><span>Risk ${q.blendedRiskScore}</span><span>${DF.fmtDate(q.updatedAt)}</span></div>
+                        </div>
+                    `).join("") : `<div class="kanban-empty">No deals</div>`}
+                </div>`;
+            }).join("");
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    load();
+</script>
+</body>
+</html>

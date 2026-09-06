@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Reports - DealFlow360</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        @media print {
+            #nav, .no-print, button, .subnav { display: none !important; }
+            .card { box-shadow: none; border: 1px solid #ccc; break-inside: avoid; }
+            body { background: #fff; }
+        }
+    </style>
+</head>
+<body>
+<div id="nav"></div>
+<div class="page">
+    <h1>Sales Reporting</h1>
+    <p class="subtitle">A7 - Period / Sales Rep / Approval Status / Product filters, with export-ready totals</p>
+
+    <div id="msg"></div>
+
+    <div class="card">
+        <div class="flex-between">
+            <h2 class="mt-0">Filters</h2>
+            <div class="flex gap-8 no-print">
+                <button class="btn-outline btn-sm" onclick="exportCsv()">Export XLS (CSV)</button>
+                <button class="btn-outline btn-sm" onclick="window.print()">Export PDF (print)</button>
+            </div>
+        </div>
+        <div class="flex gap-8 no-print" style="margin-bottom:10px">
+            <span class="muted" style="align-self:center">Period:</span>
+            <button class="btn-outline btn-sm" onclick="preset('today')">Today</button>
+            <button class="btn-outline btn-sm" onclick="preset('week')">This week</button>
+            <button class="btn-outline btn-sm" onclick="preset('month')">This month</button>
+            <button class="btn-outline btn-sm" onclick="preset('all')">All time</button>
+        </div>
+        <div class="grid grid-3">
+            <div><label>From date</label><input id="fFrom" type="date"></div>
+            <div><label>To date</label><input id="fTo" type="date"></div>
+            <div><label>Sales rep</label><select id="fRep"><option value="">All</option></select></div>
+            <div><label>Approval status</label>
+                <select id="fStatus"><option value="">All</option>
+                    <option>DRAFT</option><option>PENDING_APPROVAL</option><option>APPROVED</option>
+                    <option>REJECTED</option><option>UNDER_NEGOTIATION</option><option>CONFIRMED</option>
+                </select>
+            </div>
+            <div><label>Category</label><input id="fCategory" placeholder="Hardware / Service / Subscription"></div>
+            <div style="align-self:flex-end"><button class="btn-primary" onclick="runReport()">Run report</button></div>
+        </div>
+    </div>
+
+    <div class="grid grid-3" id="kpis"></div>
+
+    <div class="card">
+        <h2>Top products</h2>
+        <table>
+            <thead><tr><th>Product</th><th>Units sold</th><th>Revenue</th><th>Total discount given</th></tr></thead>
+            <tbody id="productRows"><tr><td colspan="4" class="empty">Run a report to see results.</td></tr></tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Matching quotations</h2>
+        <table>
+            <thead><tr><th>Customer</th><th>Tier</th><th>Sales rep</th><th>Status</th><th>Risk score</th><th>Total</th><th>Updated</th></tr></thead>
+            <tbody id="quoteRows"><tr><td colspan="7" class="empty">Run a report to see results.</td></tr></tbody>
+        </table>
+    </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+    DF.requireRole(["ADMIN", "SALES_MANAGER", "FINANCE"]);
+    DF.renderNav("reports");
+
+    let lastReport = null;
+
+    function isoDate(d) { return d.toISOString().slice(0, 10); }
+
+    // A7 - "Period: today, week, custom range"
+    function preset(which) {
+        const now = new Date();
+        let from = "", to = isoDate(now);
+        if (which === "today") from = isoDate(now);
+        else if (which === "week") { const d = new Date(now); d.setDate(now.getDate() - now.getDay()); from = isoDate(d); }
+        else if (which === "month") from = isoDate(new Date(now.getFullYear(), now.getMonth(), 1));
+        else to = "";
+        document.getElementById("fFrom").value = from;
+        document.getElementById("fTo").value = to;
+        runReport();
+    }
+
+    // A7 - "Export options: PDF / XLS" - a CSV opens directly in Excel; PDF goes through the browser's print dialog.
+    function exportCsv() {
+        if (!lastReport) { alert("Run a report first."); return; }
+        const esc = v => '"' + String(v === null || v === undefined ? "" : v).replace(/"/g, '""') + '"';
+        const rows = [];
+        rows.push(["DealFlow360 sales report", new Date().toLocaleString()]);
+        rows.push(["Matching quotations", lastReport.totalQuotations, "Total value", lastReport.totalValue, "Average discount %", lastReport.averageDiscountPercent]);
+        rows.push([]);
+        rows.push(["Top products"]);
+        rows.push(["Product", "Units sold", "Revenue", "Total discount given"]);
+        lastReport.topProducts.forEach(p => rows.push([p.productName, p.unitsSold, p.revenue, p.totalDiscountGiven]));
+        rows.push([]);
+        rows.push(["Quotations"]);
+        rows.push(["ID", "Customer", "Tier", "Sales rep", "Status", "Risk score", "Total", "Updated"]);
+        lastReport.quotations.forEach(q => rows.push([q.id, q.customerName, q.customerTier, q.salesRepName, q.status, q.blendedRiskScore, q.totalAmount, q.updatedAt]));
+        const csv = rows.map(r => r.map(esc).join(",")).join("\r\n");
+        const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "dealflow360-report-" + isoDate(new Date()) + ".csv";
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }
+
+    async function init() {
+        try {
+            const reps = await DF.get("/api/users/sales-reps");
+            document.getElementById("fRep").innerHTML += reps.map(r => `<option value="${r.id}">${DF.escapeHtml(r.fullName)}</option>`).join("");
+            runReport();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function runReport() {
+        DF.clearMessage("msg");
+        try {
+            const params = new URLSearchParams();
+            const from = document.getElementById("fFrom").value; if (from) params.set("fromDate", from);
+            const to = document.getElementById("fTo").value; if (to) params.set("toDate", to);
+            const rep = document.getElementById("fRep").value; if (rep) params.set("salesRepId", rep);
+            const status = document.getElementById("fStatus").value; if (status) params.set("status", status);
+            const category = document.getElementById("fCategory").value; if (category) params.set("category", category);
+
+            const report = await DF.get("/api/reports/quotations?" + params.toString());
+            lastReport = report;
+
+            document.getElementById("kpis").innerHTML = `
+                <div class="card kpi"><div class="value">${report.totalQuotations}</div><div class="label">Matching quotations</div></div>
+                <div class="card kpi"><div class="value">${DF.fmtMoney(report.totalValue)}</div><div class="label">Total value</div></div>
+                <div class="card kpi"><div class="value">${DF.fmtPct(report.averageDiscountPercent)}</div><div class="label">Average discount</div></div>
+            `;
+
+            document.getElementById("productRows").innerHTML = report.topProducts.length ? report.topProducts.map(p => `
+                <tr><td>${DF.escapeHtml(p.productName)}</td><td>${p.unitsSold}</td><td>${DF.fmtMoney(p.revenue)}</td><td>${DF.fmtMoney(p.totalDiscountGiven)}</td></tr>
+            `).join("") : `<tr><td colspan="4" class="empty">No matching lines.</td></tr>`;
+
+            document.getElementById("quoteRows").innerHTML = report.quotations.length ? report.quotations.map(q => `
+                <tr><td><a href="/quotation-detail.html?id=${q.id}">${DF.escapeHtml(q.customerName)}</a></td>
+                <td><span class="badge">${q.customerTier}</span></td><td>${DF.escapeHtml(q.salesRepName)}</td>
+                <td><span class="${DF.badgeClass(q.status)}">${q.status.replace("_", " ")}</span></td>
+                <td>${q.blendedRiskScore}</td><td>${DF.fmtMoney(q.totalAmount)}</td><td>${DF.fmtDateTime(q.updatedAt)}</td></tr>
+            `).join("") : `<tr><td colspan="7" class="empty">No matching quotations.</td></tr>`;
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    init();
+</script>
+</body>
+</html>

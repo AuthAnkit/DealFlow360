@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Deal Health - DealFlow360</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div id="nav"></div>
+<div class="page">
+    <h1>Deal Health &amp; Anomaly Dashboard</h1>
+    <p class="subtitle">B9 - live data pulled from actual quotations, fulfillment and approval records</p>
+
+    <div id="msg"></div>
+
+    <div class="grid grid-3" id="kpis"></div>
+
+    <div class="card">
+        <h2>Stalled deals</h2>
+        <p class="muted" style="margin-top:0">Open quotations with no activity for several days.</p>
+        <table>
+            <thead><tr><th>Customer</th><th>Detail</th><th>Severity</th><th></th></tr></thead>
+            <tbody id="stalledRows"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Discount anomalies</h2>
+        <p class="muted" style="margin-top:0">A rep's average discount on this deal vs. their own historical average.</p>
+        <table>
+            <thead><tr><th>Customer</th><th>Detail</th><th>Severity</th><th></th></tr></thead>
+            <tbody id="anomalyRows"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Delivery slippage</h2>
+        <p class="muted" style="margin-top:0">Fulfillment splits past their expected delivery date and not yet marked delivered.</p>
+        <table>
+            <thead><tr><th>Customer</th><th>Detail</th><th>Severity</th><th></th></tr></thead>
+            <tbody id="slippageRows"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Margin anomalies</h2>
+        <p class="muted" style="margin-top:0">A deal's margin significantly below the sales rep's own historical average margin.</p>
+        <table>
+            <thead><tr><th>Customer</th><th>Detail</th><th>Severity</th><th></th></tr></thead>
+            <tbody id="marginAnomalyRows"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Negotiation loops</h2>
+        <p class="muted" style="margin-top:0">Quotations stuck in repeated customer counter-discount rounds.</p>
+        <table>
+            <thead><tr><th>Customer</th><th>Detail</th><th>Severity</th><th></th></tr></thead>
+            <tbody id="negotiationLoopRows"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Approval delays</h2>
+        <p class="muted" style="margin-top:0">Quotations that have been waiting on Manager/Finance approval too long.</p>
+        <table>
+            <thead><tr><th>Customer</th><th>Detail</th><th>Severity</th><th></th></tr></thead>
+            <tbody id="approvalDelayRows"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
+        </table>
+    </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+    DF.requireRole(["ADMIN", "SALES_MANAGER", "FINANCE"]);
+    DF.renderNav("deal-health");
+
+    function renderAlertRows(elId, alerts) {
+        const el = document.getElementById(elId);
+        el.innerHTML = alerts.length ? alerts.map(a => `
+            <tr>
+                <td><a href="/quotation-detail.html?id=${a.quotationId}">${DF.escapeHtml(a.customerName)}</a></td>
+                <td>${DF.escapeHtml(a.message)}</td>
+                <td><span class="badge badge-${a.severity.toLowerCase()}">${a.severity}</span></td>
+                <td><button class="btn-outline btn-sm" onclick="nudge(${a.quotationId})">Nudge rep</button></td>
+            </tr>
+        `).join("") : `<tr><td colspan="4" class="empty">Nothing to flag right now.</td></tr>`;
+    }
+
+    async function load() {
+        try {
+            const health = await DF.get("/api/dashboard/deal-health");
+            const totalAlerts = health.stalledDeals.length + health.discountAnomalies.length + health.deliverySlippages.length
+                + health.marginAnomalies.length + health.negotiationLoops.length + health.approvalDelays.length;
+            document.getElementById("kpis").innerHTML = `
+                <div class="card kpi"><div class="value">${health.openQuotations}</div><div class="label">Open quotations</div></div>
+                <div class="card kpi"><div class="value">${DF.fmtMoney(health.pipelineValue)}</div><div class="label">Open pipeline value</div></div>
+                <div class="card kpi"><div class="value">${totalAlerts}</div><div class="label">Total alerts</div></div>
+            `;
+            renderAlertRows("stalledRows", health.stalledDeals);
+            renderAlertRows("anomalyRows", health.discountAnomalies);
+            renderAlertRows("slippageRows", health.deliverySlippages);
+            renderAlertRows("marginAnomalyRows", health.marginAnomalies);
+            renderAlertRows("negotiationLoopRows", health.negotiationLoops);
+            renderAlertRows("approvalDelayRows", health.approvalDelays);
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function nudge(quotationId) {
+        try {
+            await DF.post(`/api/dashboard/deal-health/${quotationId}/nudge`, { message: "Please review this deal - it was flagged on the Deal Health dashboard." });
+            alert("Nudge logged for the sales rep.");
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    load();
+</script>
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Customer Portal - DealFlow360</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div id="nav"></div>
+<div class="page">
+    <div class="ecom-banner flex-between">
+        <div>
+            <h1 id="greeting">My Orders</h1>
+            <p class="subtitle">Track, review and negotiate your quotations - no email back-and-forth.</p>
+        </div>
+        <a class="btn btn-primary" href="/portal-catalog.html" style="white-space:nowrap">+ New request</a>
+    </div>
+
+    <div id="msg"></div>
+
+    <div class="grid grid-3" id="kpis" style="margin-bottom:20px"></div>
+
+    <div id="orders"></div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+    const user = DF.requireRole(["CUSTOMER"]);
+    DF.renderNav("portal");
+    document.getElementById("greeting").textContent = "Welcome back, " + user.fullName;
+
+    const STATUS_LABELS = {
+        DRAFT: "Being prepared",
+        PENDING_APPROVAL: "Awaiting seller approval",
+        APPROVED: "Approved - ready to confirm",
+        UNDER_NEGOTIATION: "Negotiation in progress",
+        CONFIRMED: "Confirmed",
+        REJECTED: "Not approved"
+    };
+
+    // A self-service request reads UNDER_NEGOTIATION the moment its note is posted, even though a
+    // rep hasn't reviewed it yet - currentApprovalStep is still "NONE" until they submit it, so show
+    // an honest label for that specific case instead of implying a back-and-forth is already happening.
+    function statusLabel(q) {
+        if (q.status === "UNDER_NEGOTIATION" && q.currentApprovalStep === "NONE") return "Awaiting review";
+        return STATUS_LABELS[q.status] || q.status.replace("_", " ");
+    }
+
+    async function load() {
+        try {
+            const quotations = await DF.get("/api/portal/quotations");
+
+            const confirmed = quotations.filter(q => q.status === "CONFIRMED");
+            const active = quotations.filter(q => !["CONFIRMED", "REJECTED"].includes(q.status));
+            const lifetimeValue = confirmed.reduce((sum, q) => sum + Number(q.totalAmount || 0), 0);
+
+            document.getElementById("kpis").innerHTML = `
+                <div class="card kpi"><div class="value">${quotations.length}</div><div class="label">Total orders</div></div>
+                <div class="card kpi"><div class="value">${active.length}</div><div class="label">In progress</div></div>
+                <div class="card kpi"><div class="value">${DF.fmtMoney(lifetimeValue)}</div><div class="label">Confirmed order value</div></div>
+            `;
+
+            const container = document.getElementById("orders");
+            if (!quotations.length) {
+                container.innerHTML = `<div class="card" style="text-align:center;padding:40px 20px">
+                    <div class="empty" style="margin-bottom:14px">No orders yet - your sales rep will share a quotation here, or you can build your own list right now.</div>
+                    <a class="btn btn-primary" href="/portal-catalog.html">Browse products &amp; submit a request</a>
+                </div>`;
+                return;
+            }
+
+            // Fetch each order's line items so we can show real product thumbnails on the order card.
+            const detailed = await Promise.all(quotations.map(q => DF.get(`/api/portal/quotations/${q.id}`)));
+
+            container.innerHTML = detailed
+                .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+                .map(q => {
+                    const thumbs = q.lines.slice(0, 5).map(l => DF.productThumb(l.productImageUrl, l.category, 46)).join("");
+                    const itemWord = q.lines.length === 1 ? "item" : "items";
+                    return `
+                    <div class="card order-card">
+                        <div class="order-card-header">
+                            <div>
+                                <div class="label">Order</div>
+                                <div class="value">#${q.id} &middot; ${DF.escapeHtml(q.salesRepName || "")}</div>
+                            </div>
+                            <div>
+                                <div class="label">Placed</div>
+                                <div class="value">${DF.fmtDate(q.createdAt)}</div>
+                            </div>
+                            <div>
+                                <div class="label">Status</div>
+                                <div class="value"><span class="${DF.badgeClass(q.status)}">${statusLabel(q)}</span></div>
+                            </div>
+                        </div>
+                        <div class="order-card-thumbs">${thumbs}</div>
+                        <div class="order-card-footer">
+                            <div>
+                                <span class="muted">${q.lines.length} ${itemWord}</span>
+                                &nbsp;&middot;&nbsp;
+                                <strong>${DF.fmtMoney(q.totalAmount)}</strong>
+                            </div>
+                            <a class="btn btn-primary" href="/portal-quotation.html?id=${q.id}">View order &rarr;</a>
+                        </div>
+                    </div>`;
+                }).join("");
+        } catch (e) { DF.showError("msg", e); }
+    }
+    load();
+</script>
+</body>
+</html>

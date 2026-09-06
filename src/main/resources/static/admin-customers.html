@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Customers - DealFlow360</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div id="nav"></div>
+<div class="page">
+    <h1>Backend Setup</h1>
+    <p class="subtitle">Customer master + Customer Portal credentials</p>
+
+    <div class="subnav">
+        <a href="/admin-products.html">Products</a>
+        <a href="/admin-warehouses.html">Warehouses &amp; Stock</a>
+        <a href="/admin-discounts.html">Discount &amp; Approval Chain</a>
+        <a href="/admin-subscriptions.html">Subscription Plans</a>
+        <a href="/admin-upsell.html">Recommendation Rules</a>
+        <a href="/admin-customers.html" class="active">Customers</a>
+        <a href="/admin-users.html">Staff Users</a>
+    </div>
+
+    <div id="msg"></div>
+
+    <div class="card" id="formCard">
+        <h2>Add customer</h2>
+        <div class="grid grid-2">
+            <div><label>Company name</label><input id="cName"></div>
+            <div><label>Email</label><input id="cEmail"></div>
+            <div><label>Tier</label><select id="cTier"><option>BRONZE</option><option>SILVER</option><option>GOLD</option></select></div>
+            <div></div>
+            <div><label>Portal username</label><input id="cPortalUser"></div>
+            <div><label>Portal password</label><input id="cPortalPass" type="password"></div>
+        </div>
+        <button class="btn-primary" style="margin-top:14px" onclick="createCustomer()">Add customer</button>
+    </div>
+
+    <div class="card">
+        <h2>Customers</h2>
+        <table>
+            <thead><tr><th>Name</th><th>Email</th><th>Tier</th><th>Portal username</th></tr></thead>
+            <tbody id="rows"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
+        </table>
+    </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+    const user = DF.requireRole(["ADMIN", "SALES_MANAGER", "FINANCE"]);
+    DF.renderNav("admin");
+    if (user.role !== "ADMIN") document.getElementById("formCard").style.display = "none";
+
+    async function load() {
+        try {
+            const customers = await DF.get("/api/customers");
+            document.getElementById("rows").innerHTML = customers.length ? customers.map(c => `
+                <tr><td>${DF.escapeHtml(c.name)}</td><td>${DF.escapeHtml(c.email || "")}</td>
+                <td><span class="badge">${c.tier}</span></td><td>${DF.escapeHtml(c.portalUsername || "-")}</td></tr>
+            `).join("") : `<tr><td colspan="4" class="empty">No customers yet.</td></tr>`;
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function createCustomer() {
+        DF.clearMessage("msg");
+        try {
+            await DF.post("/api/customers", {
+                name: document.getElementById("cName").value,
+                email: document.getElementById("cEmail").value,
+                tier: document.getElementById("cTier").value,
+                portalUsername: document.getElementById("cPortalUser").value,
+                portalPassword: document.getElementById("cPortalPass").value
+            });
+            ["cName", "cEmail", "cPortalUser", "cPortalPass"].forEach(id => document.getElementById(id).value = "");
+            load();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    load();
+</script>
+</body>
+</html>

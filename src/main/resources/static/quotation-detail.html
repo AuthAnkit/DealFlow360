@@ -1,0 +1,1325 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Quotation - DealFlow360</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div id="nav"></div>
+<div class="page">
+    <div class="flex-between">
+        <div>
+            <h1 id="title">Quotation</h1>
+            <p class="subtitle" id="subtitle"></p>
+        </div>
+        <div class="text-right">
+            <div><span id="statusBadge" class="badge">-</span></div>
+            <div class="muted" style="margin-top:6px">Total: <strong id="totalAmount">-</strong></div>
+        </div>
+    </div>
+
+    <div id="msg"></div>
+
+    <div class="card card-tight">
+        <div class="grid grid-3">
+            <div><div class="label muted" style="font-size:12px">CUSTOMER</div><div id="custLine">-</div></div>
+            <div><div class="label muted" style="font-size:12px">SALES REP</div><div id="repLine">-</div></div>
+            <div>
+                <div class="label muted" style="font-size:12px">BLENDED DISCOUNT RISK SCORE</div>
+                <div id="riskLine">-</div>
+                <div class="risk-meter"><div id="riskBar" style="width:0%"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" id="intelligenceCard">
+        <div class="flex-between">
+            <h2 class="mt-0">Deal Intelligence <span class="badge badge-automated">Copilot</span></h2>
+            <span class="muted" style="font-size:12px">Live insights from the actual quotation data - not fixed text</span>
+        </div>
+        <div class="grid grid-3">
+            <div>
+                <div class="label muted" style="font-size:12px">MARGIN</div>
+                <div id="ciMargin">-</div>
+            </div>
+            <div>
+                <div class="label muted" style="font-size:12px">FULFILLMENT</div>
+                <div id="ciFulfillment">-</div>
+            </div>
+            <div style="text-align:center">
+                <div id="scoreBadge" class="score-badge score-healthy">-</div>
+                <div class="muted" style="font-size:12px;margin-top:4px">Deal Health Score</div>
+                <div id="scoreBand" class="band-healthy">-</div>
+            </div>
+        </div>
+        <div id="insightsList" style="margin-top:14px"></div>
+        <div id="scoreDetail" style="margin-top:10px;display:none">
+            <h3>Why this score?</h3>
+            <div id="scoreFactors"></div>
+            <h3 style="margin-top:12px">Recommended actions</h3>
+            <ul id="scoreActions" style="margin:0;padding-left:18px;font-size:13px;color:#565c66"></ul>
+        </div>
+        <button class="btn-outline btn-sm" style="margin-top:10px" onclick="toggleScoreDetail()">Toggle score breakdown</button>
+    </div>
+
+    <div class="tabs">
+        <button class="active" onclick="showTab('cart')">Cart &amp; Recommendations</button>
+        <button onclick="showTab('approval')">Approval</button>
+        <button onclick="showTab('fulfillment')">Fulfillment</button>
+        <button onclick="showTab('billing')">Billing</button>
+        <button onclick="showTab('negotiation')">Negotiation</button>
+        <button onclick="showTab('simulator')">What-If Simulator</button>
+        <button onclick="showTab('timeline')">Timeline</button>
+    </div>
+
+    <!-- ============================== CART ============================== -->
+    <div class="tab-panel active" id="tab-cart">
+        <div id="statusHint" class="info-box" style="margin-bottom:14px"></div>
+
+        <div class="card">
+            <div class="flex-between">
+                <h2 class="mt-0">Lines</h2>
+                <div id="orderDiscountWrap" class="flex gap-8" style="align-items:center;display:none">
+                    <label style="margin:0">Order-level discount %</label>
+                    <input id="orderDiscount" type="number" step="0.01" min="0" max="100" value="0" style="width:90px">
+                    <button class="btn-outline btn-sm" onclick="applyOrderDiscount()">Apply to all lines</button>
+                </div>
+            </div>
+            <table>
+                <thead><tr><th>Product</th><th>Category</th><th>Qty</th><th>Unit price</th><th>Discount %</th><th>Ceiling</th><th>Line total</th><th>Margin</th><th></th></tr></thead>
+                <tbody id="lineRows"><tr><td colspan="9" class="empty">Loading...</td></tr></tbody>
+            </table>
+        </div>
+
+        <div class="card" id="addLineCard">
+            <h2>Add line</h2>
+            <div class="grid grid-3">
+                <div><label>Product</label><select id="lProduct" onchange="onProductChange()"></select></div>
+                <div><label>Quantity</label><input id="lQty" type="number" value="1" min="1"></div>
+                <div><label>Discount %</label><input id="lDiscount" type="number" value="0" step="0.01"></div>
+                <div><label>Line type</label>
+                    <select id="lType" onchange="onTypeChange()"><option value="ONE_TIME">One-time</option><option value="RECURRING">Recurring (subscription)</option></select>
+                </div>
+                <div id="lPlanWrap" style="display:none"><label>Subscription plan</label><select id="lPlan" onchange="renderPlanInfo()"></select></div>
+            </div>
+            <div id="lProductInfo" class="muted" style="margin-top:8px;font-size:13px"></div>
+            <button class="btn-primary" style="margin-top:14px" onclick="addLine()">Add to cart</button>
+        </div>
+
+        <!-- ============================== SMART RECOMMENDATIONS (B5) ============================== -->
+        <div class="card" id="recoCard">
+            <div class="flex-between">
+                <h2 class="mt-0">&#128161; Smart Recommendations <span class="badge badge-automated">Live</span></h2>
+                <div class="flex gap-8" style="align-items:center">
+                    <span class="muted" id="recoDismissedNote" style="font-size:12px"></span>
+                    <button class="btn-outline btn-sm" id="btnRestoreReco" style="display:none" onclick="restoreRecommendations()">Show dismissed</button>
+                    <button class="btn-outline btn-sm" onclick="loadRecommendations()">Refresh</button>
+                </div>
+            </div>
+            <p class="muted" style="margin-top:0">Ranked from the configured product relationships and this quotation's real lines, quantities,
+                discounts and the customer's tier prices - every figure is the actual change accepting it would make. Nothing is applied
+                until you click.</p>
+            <div class="tabs" id="recoTabs" style="margin-bottom:10px">
+                <button class="active" onclick="setRecoTab('ALL')">All <span id="recoCountAll"></span></button>
+                <button onclick="setRecoTab('CROSS_SELL')">Cross-Sell <span id="recoCountCross"></span></button>
+                <button onclick="setRecoTab('UPSELL')">Upsell <span id="recoCountUpsell"></span></button>
+                <button onclick="setRecoTab('PRODUCT_UPGRADE')">Upgrade <span id="recoCountUpgrade"></span></button>
+            </div>
+            <div id="recoList" class="grid grid-3"></div>
+        </div>
+
+        <div class="card" id="importCard">
+            <h2>Import from PDF <span class="badge badge-automated">Automation</span></h2>
+            <p class="muted" style="margin-top:0">Upload a customer's PDF (RFQ, purchase order, prior quote) instead of
+                typing every line by hand. The text is really extracted from the PDF and matched against the product
+                catalog - review the candidates below before anything is added.</p>
+            <div class="upload-drop">
+                <input type="file" id="importFile" accept="application/pdf">
+                <button class="btn-outline" style="margin-top:10px" onclick="previewImport()">Scan PDF</button>
+            </div>
+            <div id="importResults" style="margin-top:14px"></div>
+        </div>
+
+        <div class="card" id="actionsCard">
+            <h2>Actions</h2>
+            <div class="flex gap-8" style="flex-wrap:wrap">
+                <button class="btn-primary" id="btnSubmit" onclick="submitQuote()">Submit for approval</button>
+                <button class="btn-success" id="btnConfirm" onclick="confirmQuote()">Confirm order (internal)</button>
+                <button class="btn-outline" id="btnReopen" onclick="reopenQuote()">Reopen for revision</button>
+            </div>
+            <p class="muted" style="margin-top:10px" id="actionsHint">Submitting recomputes the blended discount risk score and either
+                approves automatically or routes to the approval chain configured in Backend Setup.</p>
+        </div>
+    </div>
+
+    <!-- ============================== APPROVAL ============================== -->
+    <div class="tab-panel" id="tab-approval">
+        <div class="card">
+            <h2>Discount approval</h2>
+            <div id="approvalStatusBox" class="info-box">-</div>
+            <div id="approvalSteps" class="stepper" style="margin:12px 0"></div>
+            <div class="flex gap-8" id="approvalActions"></div>
+            <div id="reasonWrap" style="display:none;margin-top:10px">
+                <label>Reason</label><input id="approvalReason" placeholder="Optional note for the audit trail">
+            </div>
+            <button class="btn-outline btn-sm" style="margin-top:12px" onclick="toggleApprovalExplanation()">Why this decision?</button>
+            <div id="approvalExplanation" style="display:none;margin-top:10px">
+                <div id="approvalNarrative" class="info-box"></div>
+                <table>
+                    <thead><tr><th>Product</th><th>Category</th><th>Allowed</th><th>Applied</th><th>Overage</th></tr></thead>
+                    <tbody id="approvalExplanationRows"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Audit trail</h2>
+            <table>
+                <thead><tr><th>When</th><th>Role</th><th>Action</th><th>By</th><th>Reason</th></tr></thead>
+                <tbody id="approvalHistoryRows"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ============================== FULFILLMENT ============================== -->
+    <div class="tab-panel" id="tab-fulfillment">
+        <div class="card">
+            <div class="flex-between">
+                <h2 class="mt-0">Warehouse split (auto-suggested)</h2>
+                <div class="flex gap-8">
+                    <button class="btn-success btn-sm" id="btnAcceptSplit" onclick="acceptSplit()">Accept suggested split</button>
+                    <button class="btn-outline btn-sm" id="btnRegenerate" onclick="regenerateFulfillment()">Regenerate</button>
+                </div>
+            </div>
+            <div id="acceptedBox" class="success-box" style="display:none"></div>
+            <table>
+                <thead><tr><th>Product</th><th>Warehouse</th><th>Qty fulfilled</th><th>Shipment cost</th><th>Expected delivery</th><th>Override?</th><th>Delivery</th></tr></thead>
+                <tbody id="fulfillmentRows"><tr><td colspan="7" class="empty">No fulfillment plan yet - submit and approve the quotation first.</td></tr></tbody>
+            </table>
+            <p class="muted" id="fulfillmentSummary"></p>
+        </div>
+
+        <div class="card">
+            <h2>Backorders</h2>
+            <table>
+                <thead><tr><th>Product</th><th>Qty pending</th><th></th></tr></thead>
+                <tbody id="backorderRows"><tr><td colspan="3" class="empty">No backorders.</td></tr></tbody>
+            </table>
+        </div>
+
+        <div class="card" id="optimizeCard">
+            <div class="flex-between">
+                <h2 class="mt-0">Compare warehouse optimization strategies</h2>
+                <button class="btn-outline btn-sm" onclick="loadOptimization()">Refresh</button>
+            </div>
+            <p class="muted" style="margin-top:0">A read-only preview of three strategies against current stock - accepting one
+                applies it as a manual override per line below.</p>
+            <div id="optimizeResults"><div class="muted">Loading...</div></div>
+        </div>
+
+        <div class="card" id="overrideCard">
+            <h2>Manual override</h2>
+            <div class="grid grid-3">
+                <div><label>Product</label><select id="ofProduct"></select></div>
+                <div><label>Warehouse</label><select id="ofWarehouse"></select></div>
+                <div><label>Quantity</label><input id="ofQty" type="number" value="1" min="1"></div>
+            </div>
+            <button class="btn-outline" style="margin-top:14px" onclick="overrideFulfillment()">Apply override</button>
+        </div>
+    </div>
+
+    <!-- ============================== BILLING ============================== -->
+    <div class="tab-panel" id="tab-billing">
+        <div class="card">
+            <div class="flex-between">
+                <h2 class="mt-0">Invoice &amp; payments</h2>
+                <span id="invoiceStatusBadge" class="badge">-</span>
+            </div>
+            <div class="grid grid-3" id="billingKpis"></div>
+            <div id="billingNotConfirmed" class="info-box" style="display:none">Invoices and the recurring billing schedule are generated when the order is confirmed.</div>
+            <div id="paymentWrap" style="display:none;margin-top:12px">
+                <div class="grid grid-3">
+                    <div><label>Payment reference</label><input id="payRef" placeholder="e.g. NEFT-000123 (optional)"></div>
+                    <div style="align-self:flex-end"><button class="btn-success" onclick="recordPayment(null, true)">Record payment for everything due</button></div>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <h2>One-time invoice</h2>
+            <p class="muted" style="margin-top:0">Hardware / service lines are invoiced once, on confirmation.</p>
+            <table>
+                <thead><tr><th>Product</th><th>Invoice date</th><th>Amount</th><th>Status</th><th>Note</th><th></th></tr></thead>
+                <tbody id="oneTimeRows"><tr><td colspan="6" class="empty">No one-time invoice yet.</td></tr></tbody>
+            </table>
+        </div>
+        <div class="card">
+            <h2>Recurring billing schedule</h2>
+            <p class="muted" style="margin-top:0">Subscription lines bill per cycle - shown separately from the one-time invoice, on the same order.</p>
+            <table>
+                <thead><tr><th>Product</th><th>Billing date</th><th>Amount</th><th>Type</th><th>Status</th><th>Note</th><th></th></tr></thead>
+                <tbody id="billingRows"><tr><td colspan="7" class="empty">No recurring lines on this quotation.</td></tr></tbody>
+            </table>
+        </div>
+        <div class="card" id="billingActionsCard">
+            <h2>Modify / cancel a recurring line</h2>
+            <div class="grid grid-3">
+                <div><label>Recurring line</label><select id="bLine"></select></div>
+                <div><label>New quantity</label><input id="bQty" type="number" value="1" min="1"></div>
+                <div style="align-self:flex-end">
+                    <button class="btn-outline" onclick="modifySubscription()">Prorate quantity change</button>
+                </div>
+            </div>
+            <div style="margin-top:10px">
+                <button class="btn-danger btn-sm" onclick="cancelSubscription()">Cancel this recurring line (credit note)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================== NEGOTIATION ============================== -->
+    <div class="tab-panel" id="tab-negotiation">
+        <div class="card">
+            <h2>Customer negotiation thread</h2>
+            <p class="muted" style="margin-top:0">This is the same thread the customer sees (and edits) from their own separate portal.</p>
+            <div id="negotiationThread"></div>
+            <div style="margin-top:14px">
+                <label>Reply as sales rep (comment only)</label>
+                <input id="replyText" placeholder="Type a message for the customer...">
+                <button class="btn-outline" style="margin-top:8px" onclick="sendReply()">Send</button>
+            </div>
+        </div>
+
+        <div class="card" id="negotiationAssistantCard">
+            <h2>Negotiation Assistant <span class="badge badge-automated">Copilot</span></h2>
+            <p class="muted" style="margin-top:0">Enter what the customer is asking for and get real, calculated alternatives -
+                not a single take-it-or-leave-it number.</p>
+            <div class="grid grid-3">
+                <div><label>Line</label><select id="naLine"></select></div>
+                <div><label>Requested discount %</label><input id="naDiscount" type="number" step="0.01" value="20"></div>
+                <div style="align-self:flex-end"><button class="btn-primary" onclick="getNegotiationAlternatives()">Get alternatives</button></div>
+            </div>
+            <div id="negotiationOptions" style="margin-top:14px"></div>
+        </div>
+    </div>
+
+    <!-- ============================== WHAT-IF SIMULATOR ============================== -->
+    <div class="tab-panel" id="tab-simulator">
+        <div class="card">
+            <h2>What-If Deal Simulator</h2>
+            <p class="muted" style="margin-top:0">Try a different discount or quantity on an existing line, or add a hypothetical
+                product - nothing here changes the real quotation until you click Apply Scenario.</p>
+            <div class="grid grid-3">
+                <div><label>Line to change</label><select id="simLine"></select></div>
+                <div><label>New quantity</label><input id="simQty" type="number" min="1" placeholder="unchanged"></div>
+                <div><label>New discount %</label><input id="simDiscount" type="number" step="0.01" placeholder="unchanged"></div>
+            </div>
+            <div class="grid grid-3" style="margin-top:10px">
+                <div><label>Or add a hypothetical product</label><select id="simAddProduct"><option value="">(none)</option></select></div>
+                <div><label>Quantity</label><input id="simAddQty" type="number" min="1" value="1"></div>
+                <div><label>Discount %</label><input id="simAddDiscount" type="number" step="0.01" value="0"></div>
+            </div>
+            <button class="btn-primary" style="margin-top:14px" onclick="runScenario()">Run scenario</button>
+            <div id="scenarioResults" style="margin-top:16px"></div>
+        </div>
+    </div>
+
+    <!-- ============================== TIMELINE ============================== -->
+    <div class="tab-panel" id="tab-timeline">
+        <div class="card">
+            <h2>Deal Timeline</h2>
+            <p class="muted" style="margin-top:0">The complete story of this deal, built from the real audit trail, approval log,
+                and negotiation thread.</p>
+            <div id="timelineList" class="timeline"></div>
+        </div>
+    </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+    const user = DF.requireRole(["ADMIN", "SALES_REP", "SALES_MANAGER", "FINANCE"]);
+    DF.renderNav("quotations");
+
+    const params = new URLSearchParams(window.location.search);
+    const quotationId = params.get("id");
+    if (!quotationId) window.location.href = "/quotations.html";
+
+    let quotation = null;
+    let products = [];
+    let subscriptionPlans = [];
+    let warehouses = [];
+
+    function showTab(name) {
+        document.querySelectorAll(".tabs button").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+        document.querySelector(`.tabs button[onclick="showTab('${name}')"]`).classList.add("active");
+        document.getElementById("tab-" + name).classList.add("active");
+        if (name === "approval") loadApproval();
+        if (name === "fulfillment") loadFulfillment();
+        if (name === "billing") loadBilling();
+        if (name === "negotiation") { loadNegotiation(); populateNegotiationLineSelect(); }
+        if (name === "simulator") populateSimulatorSelects();
+        if (name === "timeline") loadTimeline();
+    }
+
+    async function loadAll() {
+        try {
+            [products, subscriptionPlans, warehouses] = await Promise.all([
+                DF.get("/api/products"), DF.get("/api/subscription-plans"), DF.get("/api/warehouses")
+            ]);
+            document.getElementById("lProduct").innerHTML = products.filter(p => p.active !== false).map(p => `<option value="${p.id}">${DF.escapeHtml(p.name)} (${DF.escapeHtml(p.category)})</option>`).join("");
+            onProductChange();
+            document.getElementById("ofProduct").innerHTML = products.map(p => `<option value="${p.id}">${DF.escapeHtml(p.name)}</option>`).join("");
+            document.getElementById("ofWarehouse").innerHTML = warehouses.map(w => `<option value="${w.id}">${DF.escapeHtml(w.name)}</option>`).join("");
+            await refresh();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function refresh() {
+        quotation = await DF.get("/api/quotations/" + quotationId);
+        document.getElementById("title").textContent = "Quotation #" + quotation.id + " - " + quotation.customerName;
+        document.getElementById("subtitle").textContent = "B3-B8 - Quotation Builder, Approval, Fulfillment, Billing & Negotiation";
+        document.getElementById("statusBadge").className = DF.badgeClass(quotation.status);
+        document.getElementById("statusBadge").textContent = quotation.status.replace("_", " ");
+        document.getElementById("totalAmount").textContent = DF.fmtMoney(quotation.totalAmount);
+        document.getElementById("custLine").textContent = quotation.customerName + " (" + quotation.customerTier + ")";
+        document.getElementById("repLine").textContent = quotation.salesRepName;
+        document.getElementById("riskLine").textContent = quotation.blendedRiskScore + " (avg discount " + quotation.averageDiscountPercent + "%)";
+        document.getElementById("riskBar").style.width = Math.min(100, Number(quotation.blendedRiskScore) * 4) + "%";
+
+        renderLines();
+
+        // A quotation can be edited while DRAFT (being built) or UNDER_NEGOTIATION (going back and
+        // forth with the customer, including a self-service "Browse & Request" order the moment its
+        // note is posted) - not just DRAFT. It can be (re)submitted for approval from either of those
+        // states too, so a self-service request that never went through submit isn't stuck. Confirm
+        // only appears once it has actually been through the approval chain at least once
+        // (currentApprovalStep !== NONE) - the backend now refuses to confirm anything earlier, so
+        // don't show a button that would just error.
+        const isRep = ["ADMIN", "SALES_REP", "SALES_MANAGER"].includes(user.role);
+        const editableStatus = ["DRAFT", "UNDER_NEGOTIATION"].includes(quotation.status);
+        const canEdit = editableStatus && isRep;
+        document.getElementById("addLineCard").style.display = canEdit ? "block" : "none";
+        document.getElementById("importCard").style.display = canEdit ? "block" : "none";
+        document.getElementById("orderDiscountWrap").style.display = canEdit && quotation.lines.length ? "flex" : "none";
+
+        // Submit: from Draft, Under Negotiation, or Rejected (re-submit revised terms).
+        // Confirm: an approved / negotiated deal whose discount hasn't grown past what was approved.
+        // Reopen: bring a Rejected (or Approved-but-unconfirmed) deal back to Draft for editing.
+        const canSubmit = isRep && ["DRAFT", "UNDER_NEGOTIATION", "REJECTED"].includes(quotation.status);
+        const canConfirm = ["ADMIN", "SALES_REP", "SALES_MANAGER"].includes(user.role)
+            && ["APPROVED", "UNDER_NEGOTIATION"].includes(quotation.status)
+            && quotation.currentApprovalStep !== "NONE" && !quotation.needsReapproval;
+        const canReopen = isRep && ["REJECTED", "APPROVED"].includes(quotation.status);
+        document.getElementById("btnSubmit").style.display = canSubmit ? "inline-block" : "none";
+        document.getElementById("btnSubmit").textContent = quotation.status === "REJECTED" ? "Re-submit for approval" : "Submit for approval";
+        document.getElementById("btnConfirm").style.display = canConfirm ? "inline-block" : "none";
+        document.getElementById("btnReopen").style.display = canReopen ? "inline-block" : "none";
+        document.getElementById("actionsCard").style.display = (canSubmit || canConfirm || canReopen) ? "block" : "none";
+        document.getElementById("actionsHint").textContent = actionsHint();
+        renderStatusHint();
+
+        loadIntelligence();
+        loadRecommendations();
+    }
+
+    // What this deal needs next, in plain words - so nobody has to guess why a button is missing.
+    function statusExplanation() {
+        const q = quotation;
+        const step = q.currentApprovalStep;
+        switch (q.status) {
+            case "DRAFT":
+                return q.lines.length
+                    ? `Draft - add or adjust lines, then Submit. Current discount needs: ${q.approvalRequirementLabel.toLowerCase()}.`
+                    : "Draft - add at least one line to the cart, then Submit.";
+            case "PENDING_APPROVAL":
+                return `Waiting for ${step === "MANAGER" ? "Sales Manager" : "Finance"} approval (blended risk score ${q.blendedRiskScore}). Lines are locked while under review.`;
+            case "APPROVED":
+                return "Approved - confirm the order here, or wait for the customer to confirm from their portal. Reopen it if you need to change the lines (it will need approval again).";
+            case "REJECTED":
+                return "Rejected by the approver - see the Approval tab for the reason. Reopen it to revise the lines, or re-submit as-is; the customer can also send a lower counter-offer from the portal.";
+            case "UNDER_NEGOTIATION":
+                if (step === "NONE") return "Customer request awaiting your review - adjust lines/discounts as needed, then Submit for approval so the customer can confirm.";
+                return q.needsReapproval
+                    ? `The customer's counter-discount pushes this deal past what was approved (risk score ${q.blendedRiskScore} vs ${q.approvedRiskScore} cleared) - Submit for approval to send it to the ${q.requiresFinance ? "Manager and Finance" : "Manager"}, or lower the discount in the Cart first.`
+                    : "Under negotiation - the current terms are within what was approved, so either side can confirm; or edit the lines and re-submit.";
+            case "CONFIRMED":
+                return "Confirmed - stock is reserved in the Fulfillment tab and the invoice / billing schedule is in the Billing tab.";
+        }
+        return "";
+    }
+
+    function renderStatusHint() {
+        const el = document.getElementById("statusHint");
+        el.textContent = statusExplanation();
+        el.style.display = el.textContent ? "block" : "none";
+    }
+
+    function actionsHint() {
+        if (quotation.status === "REJECTED") return "Re-submitting sends the current terms back through the approval chain; Reopen unlocks the lines for editing first.";
+        if (quotation.needsReapproval) return "The discount grew after approval - confirming is disabled until it is re-approved (Submit for approval).";
+        return "Submitting recomputes the blended discount risk score and either approves automatically or routes to the approval chain configured in Backend Setup.";
+    }
+
+    // ---------------------------------------------------------------- Deal Copilot + Deal Health Score
+    let lastScoreDetail = null;
+
+    async function loadIntelligence() {
+        try {
+            const [intel, score] = await Promise.all([
+                DF.get(`/api/quotations/${quotationId}/intelligence`),
+                DF.get(`/api/quotations/${quotationId}/health-score`)
+            ]);
+
+            document.getElementById("ciMargin").textContent = DF.fmtMoney(intel.marginAmount) + " (" + DF.fmtPct(intel.marginPercent) + ")";
+            document.getElementById("ciFulfillment").textContent = intel.estimatedShipments + " shipment(s)"
+                + (intel.backorderUnits > 0 ? ", " + intel.backorderUnits + " unit(s) on backorder" : "");
+
+            const badge = document.getElementById("scoreBadge");
+            const band = document.getElementById("scoreBand");
+            badge.textContent = score.score;
+            badge.className = "score-badge " + (score.band === "HEALTHY" ? "score-healthy" : score.band === "ATTENTION_NEEDED" ? "score-attention" : "score-at-risk");
+            band.textContent = score.band.replace("_", " ");
+            band.className = "band-" + score.band.toLowerCase();
+            lastScoreDetail = score;
+            renderScoreDetail();
+
+            const catClass = { WARNING: "insight-warning", RISK: "insight-risk", RECOMMENDATION: "insight-recommendation", POSITIVE: "insight-positive" };
+            document.getElementById("insightsList").innerHTML = intel.insights.length ? intel.insights.map(i => `
+                <div class="insight ${catClass[i.category] || ''}">
+                    <div class="insight-title">${DF.escapeHtml(i.title)}</div>
+                    <div class="insight-message">${DF.escapeHtml(i.message)}</div>
+                </div>
+            `).join("") : `<div class="empty">No insights yet - add a line to the cart.</div>`;
+        } catch (e) { /* non-fatal - the rest of the page still works */ }
+    }
+
+    function renderScoreDetail() {
+        if (!lastScoreDetail) return;
+        document.getElementById("scoreFactors").innerHTML = lastScoreDetail.factors.length ? lastScoreDetail.factors.map(f => `
+            <div class="factor-row"><span>${DF.escapeHtml(f.label)}</span><span class="factor-points">${f.points}</span></div>
+        `).join("") : `<div class="empty">No deductions - this deal is in great shape.</div>`;
+        document.getElementById("scoreActions").innerHTML = lastScoreDetail.recommendedActions.map(a => `<li>${DF.escapeHtml(a)}</li>`).join("");
+    }
+
+    function toggleScoreDetail() {
+        const el = document.getElementById("scoreDetail");
+        el.style.display = el.style.display === "none" ? "block" : "none";
+    }
+
+    function renderLines() {
+        const rows = document.getElementById("lineRows");
+        const canEdit = ["DRAFT", "UNDER_NEGOTIATION"].includes(quotation.status) && ["ADMIN", "SALES_REP", "SALES_MANAGER"].includes(user.role);
+        if (quotation.lines.length === 0) { rows.innerHTML = `<tr><td colspan="9" class="empty">No lines yet - add a product below.</td></tr>`; return; }
+
+        rows.innerHTML = quotation.lines.map(l => `
+            <tr style="${l.overCeiling ? 'background:#fff8ec' : ''}">
+                <td><div class="flex gap-8">${DF.productThumb(l.productImageUrl, l.category, 32)}<span>${DF.escapeHtml(l.productName)} ${l.lineType === 'RECURRING' ? '<span class="badge">SUBSCRIPTION</span>' : ''}</span></div></td>
+                <td>${DF.escapeHtml(l.category)}</td>
+                <td>${canEdit ? `<div class="flex gap-8" style="align-items:center;white-space:nowrap">
+                        <button class="btn-outline btn-sm" title="Decrease" onclick="updateLine(${l.id}, ${Math.max(1, l.quantity - 1)}, null)" ${l.quantity <= 1 ? "disabled" : ""}>&minus;</button>
+                        <input type="number" value="${l.quantity}" min="1" style="width:64px;margin:0" onchange="updateLine(${l.id}, this.value, null)">
+                        <button class="btn-outline btn-sm" title="Increase" onclick="updateLine(${l.id}, ${l.quantity + 1}, null)">+</button>
+                    </div>` : l.quantity}</td>
+                <td>${DF.fmtMoney(l.unitPrice)}</td>
+                <td>${canEdit ? `<input type="number" value="${l.discountPercent}" step="0.01" style="width:80px" onchange="updateLine(${l.id}, null, this.value)">` : l.discountPercent + '%'}
+                    ${l.overCeiling ? '<div style="color:#af2b2b;font-size:11px">over ceiling</div>' : ''}</td>
+                <td>${l.ceilingPercent}%</td>
+                <td>${DF.fmtMoney(l.lineTotal)}</td>
+                <td>${DF.fmtMoney(l.marginAmount)}</td>
+                <td>${canEdit ? `<button class="btn-outline btn-sm" onclick="removeLine(${l.id})">Remove</button>` : ""}</td>
+            </tr>
+        `).join("");
+    }
+
+    // Bug fix (subscriptions): choosing a subscription product used to leave the line type on
+    // "One-time" and the plan picker hidden - the plan options never appeared and the line was
+    // quoted as a one-off at the catalog price. The product now drives the line type: a product
+    // that has subscription plans switches to Recurring and lists ITS plans (with cycle and price);
+    // a product without plans stays one-time and the Recurring option is disabled.
+    function plansForSelectedProduct() {
+        const productId = parseInt(document.getElementById("lProduct").value);
+        return subscriptionPlans.filter(p => p.product && p.product.id === productId);
+    }
+
+    function onProductChange() {
+        const plans = plansForSelectedProduct();
+        const typeSelect = document.getElementById("lType");
+        const recurringOption = typeSelect.querySelector('option[value="RECURRING"]');
+        recurringOption.disabled = plans.length === 0;
+        typeSelect.value = plans.length ? "RECURRING" : "ONE_TIME";
+        document.getElementById("lPlan").innerHTML = plans.map(p =>
+            `<option value="${p.id}">${DF.escapeHtml(p.name)} - ${DF.fmtMoney(p.pricePerCycle)} / ${p.billingCycle.toLowerCase()}</option>`).join("");
+        onTypeChange();
+    }
+
+    function onTypeChange() {
+        const recurring = document.getElementById("lType").value === "RECURRING";
+        const plans = plansForSelectedProduct();
+        if (recurring && !plans.length) {
+            document.getElementById("lType").value = "ONE_TIME";
+            document.getElementById("lProductInfo").textContent = "This product has no subscription plan - add one under Backend Setup > Subscription Plans to sell it as a recurring line.";
+            document.getElementById("lPlanWrap").style.display = "none";
+            return;
+        }
+        document.getElementById("lPlanWrap").style.display = recurring ? "block" : "none";
+        renderPlanInfo();
+    }
+
+    function renderPlanInfo() {
+        const info = document.getElementById("lProductInfo");
+        const product = products.find(p => p.id === parseInt(document.getElementById("lProduct").value));
+        if (!product) { info.textContent = ""; return; }
+        if (document.getElementById("lType").value === "RECURRING") {
+            const plan = plansForSelectedProduct().find(p => p.id === parseInt(document.getElementById("lPlan").value));
+            info.textContent = plan
+                ? `Recurring line: ${DF.fmtMoney(plan.pricePerCycle)} per ${product.unit || "unit"} per ${plan.billingCycle.toLowerCase()} cycle` +
+                  `${plan.prorationEnabled ? ", mid-cycle changes prorated" : ""}${plan.partialRefundOnCancel ? ", partial refund on cancellation" : ""}. ` +
+                  `On confirmation the first cycle is billed and a schedule of upcoming cycles is generated.`
+                : "";
+        } else {
+            info.textContent = `One-time line at the catalog price ${DF.fmtMoney(product.price)} (a tier price list may apply for this customer).`;
+        }
+    }
+
+    async function addLine() {
+        DF.clearMessage("msg");
+        try {
+            const body = {
+                productId: parseInt(document.getElementById("lProduct").value),
+                quantity: parseInt(document.getElementById("lQty").value || "1"),
+                discountPercent: parseFloat(document.getElementById("lDiscount").value || "0"),
+                lineType: document.getElementById("lType").value
+            };
+            if (body.lineType === "RECURRING") body.subscriptionPlanId = parseInt(document.getElementById("lPlan").value);
+            quotation = await DF.post(`/api/quotations/${quotationId}/lines`, body);
+            await refresh();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function updateLine(lineId, qty, discount) {
+        DF.clearMessage("msg");
+        try {
+            const body = {};
+            if (qty !== null) body.quantity = parseInt(qty);
+            if (discount !== null) body.discountPercent = parseFloat(discount);
+            quotation = await DF.put(`/api/quotations/${quotationId}/lines/${lineId}`, body);
+            await refresh();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function removeLine(lineId) {
+        DF.clearMessage("msg");
+        try { quotation = await DF.del(`/api/quotations/${quotationId}/lines/${lineId}`); await refresh(); }
+        catch (e) { DF.showError("msg", e); }
+    }
+
+    async function submitQuote() {
+        DF.clearMessage("msg");
+        try {
+            const updated = await DF.post(`/api/quotations/${quotationId}/submit`);
+            await refresh();
+            if (updated.status === "APPROVED") {
+                showTab("fulfillment");
+                alert("No approval needed - the discount is within policy. The quotation is approved and a warehouse split has been suggested.");
+            } else {
+                showTab("approval");
+            }
+        }
+        catch (e) { DF.showError("msg", e); }
+    }
+
+    async function reopenQuote() {
+        const reason = prompt("Reopen this quotation as a Draft for revision? The previous approval/rejection will be superseded.\n\nOptional note for the audit trail:", "");
+        if (reason === null) return;
+        DF.clearMessage("msg");
+        try { await DF.post(`/api/quotations/${quotationId}/reopen`, { reason }); await refresh(); showTab("cart"); }
+        catch (e) { DF.showError("msg", e); }
+    }
+
+    async function applyOrderDiscount() {
+        DF.clearMessage("msg");
+        const discountPercent = parseFloat(document.getElementById("orderDiscount").value || "0");
+        if (!confirm(`Apply ${discountPercent}% to every line on this quotation?`)) return;
+        try { quotation = await DF.put(`/api/quotations/${quotationId}/order-discount`, { discountPercent }); await refresh(); }
+        catch (e) { DF.showError("msg", e); }
+    }
+
+    async function confirmQuote() {
+        DF.clearMessage("msg");
+        try { await DF.post(`/api/quotations/${quotationId}/confirm`); await refresh(); showTab("fulfillment"); }
+        catch (e) {
+            DF.showError("msg", e);
+            // The backend may have already re-routed this quotation back to approval (its current
+            // discount exceeds policy) even though it returned an error - refresh so the status
+            // badge and approval tab reflect that immediately instead of still showing the old status.
+            await refresh();
+        }
+    }
+
+    // ---------------------------------------------------------------- PDF import (automation)
+    let importCandidates = [];
+
+    async function previewImport() {
+        DF.clearMessage("msg");
+        const fileInput = document.getElementById("importFile");
+        const resultsEl = document.getElementById("importResults");
+        if (!fileInput.files || fileInput.files.length === 0) {
+            DF.showError("msg", new Error("Choose a PDF file first."));
+            return;
+        }
+        resultsEl.innerHTML = `<div class="muted">Scanning PDF...</div>`;
+        try {
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+            const preview = await DF.upload(`/api/quotations/${quotationId}/import/preview`, formData);
+            importCandidates = preview.candidates;
+            renderImportCandidates(preview);
+        } catch (e) {
+            resultsEl.innerHTML = "";
+            DF.showError("msg", e);
+        }
+    }
+
+    function renderImportCandidates(preview) {
+        const resultsEl = document.getElementById("importResults");
+        if (!preview.candidates.length) {
+            resultsEl.innerHTML = `<div class="empty">No product-like lines were found in this PDF.</div>`;
+            return;
+        }
+        resultsEl.innerHTML = `
+            <p class="muted">Scanned ${preview.totalLinesScanned} candidate line(s), matched ${preview.matchedLines} to the catalog.</p>
+            <table>
+                <thead><tr><th></th><th>Matched product</th><th>Qty</th><th>Discount %</th><th>Source text</th></tr></thead>
+                <tbody>
+                    ${preview.candidates.map((c, i) => `
+                        <tr>
+                            <td><input type="checkbox" id="imp-check-${i}" ${c.matched ? "checked" : "disabled"}></td>
+                            <td>${c.matched ? DF.escapeHtml(c.productName) : `<span class="muted">${DF.escapeHtml(c.note || "not matched")}</span>`}</td>
+                            <td><input type="number" id="imp-qty-${i}" value="${c.quantity}" min="1" style="width:70px" ${c.matched ? "" : "disabled"}></td>
+                            <td><input type="number" id="imp-disc-${i}" value="${c.discountPercent}" step="0.01" style="width:80px" ${c.matched ? "" : "disabled"}></td>
+                            <td class="muted" style="font-size:12px">${DF.escapeHtml(c.sourceText)}</td>
+                        </tr>
+                    `).join("")}
+                </tbody>
+            </table>
+            <button class="btn-primary" style="margin-top:10px" onclick="commitImport()">Add selected lines to quote</button>
+        `;
+    }
+
+    async function commitImport() {
+        DF.clearMessage("msg");
+        try {
+            const lines = importCandidates.map((c, i) => {
+                const checkbox = document.getElementById(`imp-check-${i}`);
+                if (!c.matched || !checkbox.checked) return null;
+                return {
+                    productId: c.productId,
+                    quantity: parseInt(document.getElementById(`imp-qty-${i}`).value || "1"),
+                    discountPercent: parseFloat(document.getElementById(`imp-disc-${i}`).value || "0")
+                };
+            }).filter(l => l !== null);
+
+            if (lines.length === 0) {
+                DF.showError("msg", new Error("Select at least one matched line to import."));
+                return;
+            }
+            quotation = await DF.post(`/api/quotations/${quotationId}/import/commit`, { lines });
+            importCandidates = [];
+            document.getElementById("importResults").innerHTML = `<div class="success-box">Imported ${lines.length} line(s) from the PDF.</div>`;
+            document.getElementById("importFile").value = "";
+            await refresh();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    // ---------------------------------------------------------------- Smart Recommendations (B5)
+    let recoPanel = null;
+    let recoTab = "ALL";
+    const RECO_TYPE_LABEL = { CROSS_SELL: "Cross-sell", UPSELL: "Upsell", PRODUCT_UPGRADE: "Upgrade" };
+    const RECO_TYPE_CLASS = { CROSS_SELL: "badge-approved", UPSELL: "badge-pending", PRODUCT_UPGRADE: "badge-under-negotiation" };
+
+    function setRecoTab(tab) {
+        recoTab = tab;
+        document.querySelectorAll("#recoTabs button").forEach(b => b.classList.toggle("active", b.getAttribute("onclick").includes(`'${tab}'`)));
+        renderRecommendations();
+    }
+
+    async function loadRecommendations() {
+        const el = document.getElementById("recoList");
+        try {
+            recoPanel = await DF.get(`/api/quotations/${quotationId}/recommendations`);
+            const r = recoPanel.recommendations;
+            document.getElementById("recoCountAll").textContent = r.length ? `(${r.length})` : "";
+            document.getElementById("recoCountCross").textContent = recoPanel.crossSellCount ? `(${recoPanel.crossSellCount})` : "";
+            document.getElementById("recoCountUpsell").textContent = recoPanel.upsellCount ? `(${recoPanel.upsellCount})` : "";
+            document.getElementById("recoCountUpgrade").textContent = recoPanel.upgradeCount ? `(${recoPanel.upgradeCount})` : "";
+            document.getElementById("recoDismissedNote").textContent = recoPanel.dismissedCount ? `${recoPanel.dismissedCount} dismissed` : "";
+            document.getElementById("btnRestoreReco").style.display = recoPanel.dismissedCount ? "inline-block" : "none";
+            renderRecommendations();
+        } catch (e) { el.innerHTML = `<div class="empty">Could not load recommendations.</div>`; }
+    }
+
+    function signed(n) {
+        const v = Number(n || 0);
+        return (v > 0 ? "+" : v < 0 ? "-" : "") + DF.fmtMoney(Math.abs(v));
+    }
+
+    function renderRecommendations() {
+        const el = document.getElementById("recoList");
+        if (!recoPanel) { el.innerHTML = `<div class="muted">Loading...</div>`; return; }
+        const canAct = ["DRAFT", "UNDER_NEGOTIATION"].includes(quotation.status) && ["ADMIN", "SALES_REP", "SALES_MANAGER"].includes(user.role);
+        const list = recoPanel.recommendations.filter(r => recoTab === "ALL" || r.type === recoTab);
+        if (!list.length) {
+            el.innerHTML = `<div class="empty" style="grid-column:1/-1">${quotation.lines.length
+                ? "No " + (recoTab === "ALL" ? "" : RECO_TYPE_LABEL[recoTab].toLowerCase() + " ") + "recommendations for the current cart" + (recoPanel.dismissedCount ? " (some were dismissed)" : "") + "."
+                : "Add a product to the cart to see recommendations."}</div>`;
+            return;
+        }
+        el.innerHTML = list.map(r => {
+            const isUpgrade = r.type === "PRODUCT_UPGRADE";
+            const argsBase = `${r.ruleId}, ${r.sourceLineId || "null"}`;
+            const buttons = [];
+            if (canAct) {
+                if (r.actions.includes("UPGRADE")) buttons.push(`<button class="btn-success btn-sm" onclick="acceptRecommendation(${argsBase}, 'UPGRADE', '${jsStr(r.sourceProduct)}', '${jsStr(r.productName)}', ${r.quantitySuggestion})">Upgrade product</button>`);
+                if (r.actions.includes("ADD")) buttons.push(`<button class="btn-primary btn-sm" onclick="acceptRecommendation(${argsBase}, 'ADD', '${jsStr(r.sourceProduct)}', '${jsStr(r.productName)}', ${r.quantitySuggestion})">Add to quote</button>`);
+                if (r.actions.includes("ADD_BOTH")) buttons.push(`<button class="btn-outline btn-sm" onclick="acceptRecommendation(${argsBase}, 'ADD_BOTH', '${jsStr(r.sourceProduct)}', '${jsStr(r.productName)}', ${r.quantitySuggestion})">Add both</button>`);
+                buttons.push(`<button class="btn-outline btn-sm" onclick="dismissRecommendation(${argsBase})">Dismiss</button>`);
+            }
+            return `
+            <div class="card card-tight" style="display:flex;flex-direction:column;gap:6px">
+                <div class="flex-between">
+                    <span class="badge ${RECO_TYPE_CLASS[r.type] || ""}">${RECO_TYPE_LABEL[r.type] || r.type}</span>
+                    ${r.promotionTag ? `<span class="badge badge-automated">${DF.escapeHtml(r.promotionTag)}</span>` : (r.promoted ? '<span class="badge badge-automated">Promoted</span>' : "")}
+                </div>
+                <div class="flex gap-8" style="align-items:center">
+                    ${DF.productThumb(r.productImageUrl, r.category, 44)}
+                    <div>
+                        <div style="font-weight:600">${DF.escapeHtml(r.productName)}</div>
+                        <div class="muted" style="font-size:12px">${isUpgrade ? `Upgrade for ${r.quantitySuggestion} &times; ${DF.escapeHtml(r.sourceProduct)}` : `Goes with ${DF.escapeHtml(r.sourceProduct)}`}</div>
+                    </div>
+                </div>
+                ${isUpgrade ? `
+                <div class="summary-row" style="font-size:13px"><span class="muted-label">Current price</span><span>${DF.fmtMoney(r.currentPrice)}</span></div>
+                <div class="summary-row" style="font-size:13px"><span class="muted-label">Upgrade price</span><span>${DF.fmtMoney(r.price)}</span></div>
+                <div class="summary-row" style="font-size:13px"><span class="muted-label">Additional cost (${r.quantitySuggestion} units)</span><span class="${Number(r.priceImpact) >= 0 ? "" : "scenario-better"}">${signed(r.priceImpact)}</span></div>
+                ` : `
+                <div class="summary-row" style="font-size:13px"><span class="muted-label">Price</span><span>${DF.fmtMoney(r.price)}${r.category === "Subscription" ? " / cycle" : ""}</span></div>
+                <div class="summary-row" style="font-size:13px"><span class="muted-label">Price impact (qty ${r.quantitySuggestion})</span><span>${signed(r.priceImpact)}</span></div>
+                `}
+                <div class="summary-row" style="font-size:13px"><span class="muted-label">Margin impact</span><span class="${Number(r.marginImpact) >= 0 ? "scenario-better" : "scenario-worse"}">${signed(r.marginImpact)}</span> </div>
+                <div style="font-size:13px">${DF.escapeHtml(r.reason || "")}</div>
+                ${r.wouldNeedApproval ? `<div style="font-size:12px;color:#af2b2b">At this line's discount the upgrade would need approval.</div>` : ""}
+                <div class="muted" style="font-size:11px" title="${DF.escapeHtml(r.scoreBreakdown || "")}">Rank score ${r.priorityScore} &middot; ${DF.escapeHtml(r.scoreBreakdown || "")}</div>
+                ${buttons.length ? `<div class="flex gap-8" style="flex-wrap:wrap;margin-top:4px">${buttons.join("")}</div>` : ""}
+            </div>`;
+        }).join("");
+    }
+
+    function jsStr(s) { return String(s || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'"); }
+
+    async function acceptRecommendation(ruleId, sourceLineId, mode, sourceName, productName, qty) {
+        DF.clearMessage("msg");
+        const question = mode === "UPGRADE"
+            ? `Replace ${qty} \u00d7 ${sourceName} with ${qty} \u00d7 ${productName}? Quantity and discount are kept; price, margin, risk score and approval requirement are recalculated.`
+            : (mode === "ADD_BOTH" ? `Add ${qty} \u00d7 ${productName} alongside ${sourceName}?` : `Add ${productName} to this quotation?`);
+        if (!confirm(question)) return;
+        try {
+            const before = { total: Number(quotation.totalAmount), risk: Number(quotation.blendedRiskScore), label: quotation.approvalRequirementLabel };
+            quotation = await DF.post(`/api/quotations/${quotationId}/recommendations/accept`, { ruleId, sourceLineId, mode });
+            await refresh(); // lines, totals, margin, risk meter, approval requirement and the recommendation panel all reload
+            const after = { total: Number(quotation.totalAmount), risk: Number(quotation.blendedRiskScore), label: quotation.approvalRequirementLabel };
+            let note = `Quotation total ${DF.fmtMoney(before.total)} \u2192 ${DF.fmtMoney(after.total)}.`;
+            if (before.label !== after.label || before.risk !== after.risk) note += ` Approval requirement: ${after.label} (risk score ${after.risk}).`;
+            const box = document.getElementById("msg");
+            box.className = "success-box"; box.style.display = "block"; box.textContent = "Recommendation applied. " + note;
+            setTimeout(() => { if (box.className === "success-box") { box.style.display = "none"; box.className = "error-box"; } }, 6000);
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function dismissRecommendation(ruleId, sourceLineId) {
+        try {
+            recoPanel = await DF.post(`/api/quotations/${quotationId}/recommendations/dismiss`, { ruleId, sourceLineId });
+            await loadRecommendations();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function restoreRecommendations() {
+        try { await DF.post(`/api/quotations/${quotationId}/recommendations/restore`); await loadRecommendations(); }
+        catch (e) { DF.showError("msg", e); }
+    }
+
+    // ---------------------------------------------------------------- approval
+    async function loadApproval() {
+        approvalExplanationLoaded = false;
+        document.getElementById("approvalExplanation").style.display = "none";
+        try {
+            const history = await DF.get(`/api/quotations/${quotationId}/approval/history`);
+            const box = document.getElementById("approvalStatusBox");
+            box.textContent = `Status: ${quotation.status.replace("_", " ")} | Current step: ${quotation.currentApprovalStep} | Blended risk score: ${quotation.blendedRiskScore} | ${quotation.approvalRequirementLabel}`;
+            renderApprovalSteps();
+
+            const actions = document.getElementById("approvalActions");
+            const canAct = quotation.status === "PENDING_APPROVAL" &&
+                ((quotation.currentApprovalStep === "MANAGER" && (user.role === "SALES_MANAGER" || user.role === "ADMIN")) ||
+                 (quotation.currentApprovalStep === "FINANCE" && (user.role === "FINANCE" || user.role === "ADMIN")));
+            document.getElementById("reasonWrap").style.display = canAct ? "block" : "none";
+            actions.innerHTML = canAct ? `
+                <button class="btn-success" onclick="doApprovalAction('approve')">Approve</button>
+                <button class="btn-danger" onclick="doApprovalAction('reject')">Reject</button>
+                <button class="btn-outline" onclick="doApprovalAction('return')">Return for revision</button>
+            ` : `<span class="muted">No action available for your role at this step.</span>`;
+
+            document.getElementById("approvalHistoryRows").innerHTML = history.length ? history.map(h => `
+                <tr><td>${DF.fmtDateTime(h.timestamp)}</td><td>${h.approverRole}</td><td>${h.action.replace("_", " ")}</td><td>${DF.escapeHtml(h.actorUsername || "")}</td><td>${DF.escapeHtml(h.reason || "")}</td></tr>
+            `).join("") : `<tr><td colspan="5" class="empty">No approval activity yet.</td></tr>`;
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    // PDF B4 - "Approval steps list: Sales Manager, and Finance (only shown when required)".
+    function renderApprovalSteps() {
+        const q = quotation;
+        const steps = [{ key: "SUBMIT", label: "Submitted by rep" }, { key: "MANAGER", label: "Sales Manager" }];
+        if (q.requiresFinance || q.currentApprovalStep === "FINANCE") steps.push({ key: "FINANCE", label: "Finance" });
+        steps.push({ key: "DONE", label: q.status === "CONFIRMED" ? "Approved & confirmed" : "Approved" });
+
+        const order = ["SUBMIT", "MANAGER", "FINANCE", "DONE"];
+        let reached; // index in `order` of the current position
+        if (q.status === "PENDING_APPROVAL") reached = order.indexOf(q.currentApprovalStep);
+        else if (q.status === "APPROVED" || q.status === "CONFIRMED" || (q.currentApprovalStep === "DONE" && q.status === "UNDER_NEGOTIATION")) reached = 99;
+        else if (q.status === "REJECTED") reached = -2;
+        else reached = -1; // DRAFT / never submitted
+
+        document.getElementById("approvalSteps").innerHTML = steps.map(st => {
+            const idx = order.indexOf(st.key);
+            let cls = "";
+            if (reached === -2) cls = st.key === "SUBMIT" ? "done" : (idx === order.indexOf(q.currentApprovalStep) ? "rejected" : "");
+            else if (reached === 99) cls = "done";
+            else if (reached >= 0) cls = idx < reached ? "done" : (idx === reached ? "current" : "");
+            const dot = cls === "done" ? "&#10003;" : (cls === "rejected" ? "&times;" : (idx + 1));
+            const label = cls === "rejected" ? st.label + " - rejected" : st.label;
+            return `<div class="stepper-step ${cls}"><div class="stepper-line"></div><div class="stepper-dot">${dot}</div><div class="stepper-label">${label}</div></div>`;
+        }).join("");
+    }
+
+    let approvalExplanationLoaded = false;
+    async function toggleApprovalExplanation() {
+        const el = document.getElementById("approvalExplanation");
+        const willShow = el.style.display === "none";
+        el.style.display = willShow ? "block" : "none";
+        if (willShow && !approvalExplanationLoaded) {
+            try {
+                const explanation = await DF.get(`/api/quotations/${quotationId}/approval-explanation`);
+                document.getElementById("approvalNarrative").textContent = explanation.narrative;
+                document.getElementById("approvalExplanationRows").innerHTML = explanation.lines.map(l => `
+                    <tr><td>${DF.escapeHtml(l.productName)}</td><td>${DF.escapeHtml(l.category)}</td>
+                    <td>${DF.fmtPct(l.allowedDiscount)}</td><td>${DF.fmtPct(l.appliedDiscount)}</td>
+                    <td>${l.overage > 0 ? '<span style="color:#af2b2b">+' + l.overage + ' pts</span>' : '0 pts'}</td></tr>
+                `).join("");
+                approvalExplanationLoaded = true;
+            } catch (e) { DF.showError("msg", e); }
+        }
+    }
+
+    async function doApprovalAction(action) {
+        DF.clearMessage("msg");
+        try {
+            const reason = document.getElementById("approvalReason").value;
+            await DF.post(`/api/quotations/${quotationId}/approval/${action}`, { reason });
+            await refresh();
+            await loadApproval();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    // ---------------------------------------------------------------- fulfillment
+    async function loadFulfillment() {
+        try {
+            const plan = await DF.get(`/api/quotations/${quotationId}/fulfillment`);
+            const canManageSplits = ["ADMIN", "FINANCE"].includes(user.role);
+            document.getElementById("fulfillmentRows").innerHTML = plan.splits.length ? plan.splits.map(s => `
+                <tr>
+                    <td>${DF.escapeHtml(s.productName)}</td>
+                    <td>${DF.escapeHtml(s.warehouseName)}</td>
+                    <td>${s.quantityFulfilled}</td>
+                    <td>${DF.fmtMoney(s.shipmentCost)}</td>
+                    <td>${DF.fmtDate(s.expectedDeliveryDate)}</td>
+                    <td>${s.manualOverride ? "Manual" : "Auto"}</td>
+                    <td>${s.delivered ? '<span class="badge badge-approved">Delivered</span>'
+                        : (canManageSplits && quotation.status === "CONFIRMED" ? `<button class="btn-outline btn-sm" onclick="markDelivered(${s.id})">Mark delivered</button>` : '<span class="muted">In transit</span>')}</td>
+                </tr>
+            `).join("") : `<tr><td colspan="7" class="empty">No fulfillment plan yet - submit and approve the quotation first.</td></tr>`;
+
+            const acceptedBox = document.getElementById("acceptedBox");
+            if (quotation.fulfillmentAcceptedAt) {
+                acceptedBox.style.display = "block";
+                acceptedBox.textContent = `Suggested split accepted by ${quotation.fulfillmentAcceptedBy} on ${DF.fmtDateTime(quotation.fulfillmentAcceptedAt)} - this is the shipping plan.`;
+            } else {
+                acceptedBox.style.display = "none";
+            }
+            document.getElementById("btnAcceptSplit").style.display =
+                (canManageSplits && plan.splits.length && !quotation.fulfillmentAcceptedAt) ? "inline-block" : "none";
+
+            document.getElementById("fulfillmentSummary").textContent =
+                `${plan.totalShipments} shipment(s), total shipping cost ${DF.fmtMoney(plan.totalShippingCost)}.`;
+
+            document.getElementById("backorderRows").innerHTML = plan.backorders.filter(b => !b.resolved).length ? plan.backorders.filter(b => !b.resolved).map(b => `
+                <tr><td>${DF.escapeHtml(b.productName)}</td><td>${b.quantityPending}</td>
+                <td><button class="btn-outline btn-sm" onclick="consolidateBackorders()">Consolidate now</button></td></tr>
+            `).join("") : `<tr><td colspan="3" class="empty">No backorders.</td></tr>`;
+
+            const canManage = ["ADMIN", "FINANCE"].includes(user.role);
+            document.getElementById("overrideCard").style.display = canManage ? "block" : "none";
+            document.getElementById("btnRegenerate").style.display = ["ADMIN", "FINANCE", "SALES_MANAGER"].includes(user.role) ? "inline-block" : "none";
+
+            await loadOptimization();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function loadOptimization() {
+        const el = document.getElementById("optimizeResults");
+        el.innerHTML = `<div class="muted">Loading...</div>`;
+        try {
+            const options = await DF.get(`/api/quotations/${quotationId}/fulfillment/optimize`);
+            const canManage = ["ADMIN", "FINANCE"].includes(user.role);
+            if (!options.some(o => o.allocations.length)) {
+                el.innerHTML = `<div class="empty">Nothing to allocate yet - add a one-time line to the cart.</div>`;
+                return;
+            }
+            el.innerHTML = options.map(o => `
+                <div class="warehouse-mode-card">
+                    <div class="flex-between">
+                        <h3>${o.mode.replace("_", " ")}</h3>
+                        <span class="muted">${o.shipmentCount} shipment(s) &middot; ${DF.fmtMoney(o.totalShippingCost)}</span>
+                    </div>
+                    <p class="muted" style="margin:4px 0 8px">${DF.escapeHtml(o.narrative)}</p>
+                    <table>
+                        <thead><tr><th>Product</th><th>Warehouse</th><th>Qty</th><th>Shipping cost</th>${canManage ? "<th></th>" : ""}</tr></thead>
+                        <tbody>
+                            ${o.allocations.map(a => `
+                                <tr><td>${DF.escapeHtml(a.productName)}</td><td>${DF.escapeHtml(a.warehouseName)}</td>
+                                <td>${a.quantity}</td><td>${DF.fmtMoney(a.shippingCost)}</td>
+                                ${canManage ? `<td><button class="btn-outline btn-sm" onclick="acceptAllocation('${a.productName.replace(/'/g, "\\'")}', '${a.warehouseName.replace(/'/g, "\\'")}', ${a.quantity})">Accept</button></td>` : ""}
+                                </tr>
+                            `).join("")}
+                        </tbody>
+                    </table>
+                    ${o.backorderUnits > 0 ? `<p class="muted" style="color:#af2b2b">${o.backorderUnits} unit(s) would go on backorder under this strategy.</p>` : ""}
+                </div>
+            `).join("");
+        } catch (e) {
+            el.innerHTML = `<div class="empty">Could not load optimization preview.</div>`;
+        }
+    }
+
+    async function acceptAllocation(productName, warehouseName, quantity) {
+        try {
+            const product = products.find(p => p.name === productName);
+            const warehouse = warehouses.find(w => w.name === warehouseName);
+            if (!product || !warehouse) { DF.showError("msg", new Error("Could not resolve product/warehouse.")); return; }
+            await DF.post(`/api/quotations/${quotationId}/fulfillment/override`, { productId: product.id, warehouseId: warehouse.id, quantity });
+            loadFulfillment();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function acceptSplit() {
+        try { quotation = await DF.post(`/api/quotations/${quotationId}/fulfillment/accept`); loadFulfillment(); }
+        catch (e) { DF.showError("msg", e); }
+    }
+
+    async function markDelivered(splitId) {
+        try { await DF.post(`/api/quotations/${quotationId}/fulfillment/splits/${splitId}/delivered`); loadFulfillment(); }
+        catch (e) { DF.showError("msg", e); }
+    }
+
+    async function regenerateFulfillment() {
+        try { await DF.post(`/api/quotations/${quotationId}/fulfillment/regenerate`); loadFulfillment(); }
+        catch (e) { DF.showError("msg", e); }
+    }
+
+    async function overrideFulfillment() {
+        try {
+            await DF.post(`/api/quotations/${quotationId}/fulfillment/override`, {
+                productId: parseInt(document.getElementById("ofProduct").value),
+                warehouseId: parseInt(document.getElementById("ofWarehouse").value),
+                quantity: parseInt(document.getElementById("ofQty").value || "1")
+            });
+            loadFulfillment();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function consolidateBackorders() {
+        try { await DF.post(`/api/quotations/${quotationId}/fulfillment/consolidate-backorders`); loadFulfillment(); }
+        catch (e) { DF.showError("msg", e); }
+    }
+
+    // ---------------------------------------------------------------- billing
+    const STATUS_BADGE = { PENDING: "badge", BILLED: "badge badge-pending", PAID: "badge badge-approved", CREDITED: "badge badge-under-negotiation", CANCELLED: "badge badge-rejected" };
+
+    async function loadBilling() {
+        try {
+            const summary = await DF.get(`/api/quotations/${quotationId}/billing/summary`);
+            const canPay = ["ADMIN", "FINANCE"].includes(user.role) && quotation.status === "CONFIRMED";
+            const confirmed = quotation.status === "CONFIRMED";
+
+            const badge = document.getElementById("invoiceStatusBadge");
+            badge.textContent = summary.invoiceStatus.replace(/_/g, " ");
+            badge.className = "badge " + ({ PAID: "badge-approved", PARTIALLY_PAID: "badge-pending", UNPAID: "badge-rejected" }[summary.invoiceStatus] || "");
+            document.getElementById("billingKpis").innerHTML = `
+                <div class="card kpi"><div class="value">${DF.fmtMoney(summary.oneTimeInvoiceTotal)}</div><div class="label">One-time invoiced</div></div>
+                <div class="card kpi"><div class="value">${DF.fmtMoney(summary.paidTotal)}</div><div class="label">Paid to date</div></div>
+                <div class="card kpi"><div class="value">${DF.fmtMoney(summary.outstandingTotal)}</div><div class="label">Outstanding</div></div>
+            `;
+            document.getElementById("billingNotConfirmed").style.display = confirmed ? "none" : "block";
+            document.getElementById("paymentWrap").style.display = (canPay && Number(summary.outstandingTotal) > 0) ? "block" : "none";
+
+            const payBtn = e => (canPay && e.status === "BILLED") ? `<button class="btn-outline btn-sm" onclick="recordPayment(${e.id}, false)">Record payment</button>` : "";
+            const paidNote = e => e.status === "PAID" ? `<div class="muted" style="font-size:11px">paid ${DF.fmtDateTime(e.paidAt)}${e.paymentReference ? " · " + DF.escapeHtml(e.paymentReference) : ""}</div>` : "";
+
+            const oneTime = summary.entries.filter(e => e.entryType === "ONE_TIME_INVOICE");
+            document.getElementById("oneTimeRows").innerHTML = oneTime.length ? oneTime.map(e => `
+                <tr><td>${DF.escapeHtml(e.productName)}</td><td>${DF.fmtDate(e.billingDate)}</td><td>${DF.fmtMoney(e.amount)}</td>
+                <td><span class="${STATUS_BADGE[e.status] || "badge"}">${e.status}</span>${paidNote(e)}</td><td>${DF.escapeHtml(e.note || "")}</td><td>${payBtn(e)}</td></tr>
+            `).join("") : `<tr><td colspan="6" class="empty">${confirmed ? "No one-time lines on this order." : "The one-time invoice is issued on confirmation."}</td></tr>`;
+
+            const recurring = summary.entries.filter(e => e.entryType !== "ONE_TIME_INVOICE");
+            document.getElementById("billingRows").innerHTML = recurring.length ? recurring.map(e => `
+                <tr><td>${DF.escapeHtml(e.productName)}</td><td>${DF.fmtDate(e.billingDate)}</td><td>${DF.fmtMoney(e.amount)}</td>
+                <td>${e.entryType.replace(/_/g, " ")}</td><td><span class="${STATUS_BADGE[e.status] || "badge"}">${e.status}</span>${paidNote(e)}</td><td>${DF.escapeHtml(e.note || "")}</td><td>${payBtn(e)}</td></tr>
+            `).join("") : `<tr><td colspan="7" class="empty">No recurring lines on this quotation.</td></tr>`;
+
+            const recurringLines = quotation.lines.filter(l => l.lineType === "RECURRING");
+            document.getElementById("billingActionsCard").style.display = (recurringLines.length && confirmed && ["ADMIN", "FINANCE", "SALES_REP"].includes(user.role)) ? "block" : "none";
+            document.getElementById("bLine").innerHTML = recurringLines.map(l => `<option value="${l.id}">${DF.escapeHtml(l.productName)} (qty ${l.quantity})</option>`).join("");
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function recordPayment(entryId, payAll) {
+        DF.clearMessage("msg");
+        if (!confirm(payAll ? "Record payment for everything currently due on this order?" : "Record payment for this entry?")) return;
+        try {
+            await DF.post(`/api/quotations/${quotationId}/billing/pay`, { entryId, payAll, reference: document.getElementById("payRef").value });
+            document.getElementById("payRef").value = "";
+            loadBilling();
+            loadTimelineIfVisible();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    function loadTimelineIfVisible() {
+        if (document.getElementById("tab-timeline").classList.contains("active")) loadTimeline();
+    }
+
+    async function modifySubscription() {
+        try {
+            await DF.post(`/api/quotations/${quotationId}/billing/modify`, {
+                quotationLineId: parseInt(document.getElementById("bLine").value),
+                newQuantity: parseInt(document.getElementById("bQty").value || "0")
+            });
+            await refresh();
+            loadBilling();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function cancelSubscription() {
+        if (!confirm("Cancel this recurring line? A partial refund / credit note will be generated if enabled on the plan.")) return;
+        try {
+            await DF.post(`/api/quotations/${quotationId}/billing/cancel`, {
+                quotationLineId: parseInt(document.getElementById("bLine").value),
+                reason: "Cancelled by " + user.fullName
+            });
+            loadBilling();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    // ---------------------------------------------------------------- negotiation
+    async function loadNegotiation() {
+        try {
+            const messages = await DF.get(`/api/quotations/${quotationId}/negotiation`);
+            const el = document.getElementById("negotiationThread");
+            el.innerHTML = messages.length ? messages.map(m => `
+                <div class="card card-tight" style="margin-bottom:8px">
+                    <div class="flex-between">
+                        <strong>${DF.escapeHtml(m.senderName)} <span class="muted">(${m.senderType})</span></strong>
+                        <span class="muted" style="font-size:12px">${DF.fmtDateTime(m.timestamp)}</span>
+                    </div>
+                    ${m.messageType === "COUNTER_DISCOUNT" ? `<div class="badge badge-pending" style="margin:6px 0">Counter-discount proposed: ${m.proposedDiscountPercent}%</div>` : ""}
+                    <div>${DF.escapeHtml(m.content || "")}</div>
+                </div>
+            `).join("") : `<div class="empty">No negotiation activity yet.</div>`;
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function sendReply() {
+        const content = document.getElementById("replyText").value;
+        if (!content.trim()) return;
+        try {
+            await DF.post(`/api/quotations/${quotationId}/negotiation/reply`, { content, messageType: "COMMENT" });
+            document.getElementById("replyText").value = "";
+            loadNegotiation();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    // ---------------------------------------------------------------- Negotiation Assistant
+    function populateNegotiationLineSelect() {
+        document.getElementById("naLine").innerHTML = quotation.lines.map(l =>
+            `<option value="${l.id}">${DF.escapeHtml(l.productName)} (currently ${l.discountPercent}%)</option>`).join("");
+    }
+
+    async function getNegotiationAlternatives() {
+        const el = document.getElementById("negotiationOptions");
+        el.innerHTML = `<div class="muted">Calculating alternatives...</div>`;
+        try {
+            const lineId = parseInt(document.getElementById("naLine").value);
+            const requestedDiscountPercent = parseFloat(document.getElementById("naDiscount").value || "0");
+            const result = await DF.post(`/api/quotations/${quotationId}/negotiation/alternatives`, { quotationLineId: lineId, requestedDiscountPercent });
+
+            el.innerHTML = `<p class="muted">${DF.escapeHtml(result.customerRequestSummary)}</p>` + result.options.map(o => `
+                <div class="option-card">
+                    <div class="flex-between">
+                        <h3>${DF.escapeHtml(o.label)}</h3>
+                        <span class="${o.requiresManager || o.requiresFinance ? 'badge badge-pending' : 'badge badge-approved'}">${DF.escapeHtml(o.approvalLabel)}</span>
+                    </div>
+                    <p class="muted" style="margin-top:0">${DF.escapeHtml(o.narrative)}</p>
+                    <div class="grid grid-3">
+                        <div><div class="muted" style="font-size:12px">DISCOUNT</div><div>${DF.fmtPct(o.discountPercent)}</div></div>
+                        <div><div class="muted" style="font-size:12px">MARGIN</div><div>${DF.fmtMoney(o.marginAmount)} (${DF.fmtPct(o.marginPercent)})</div></div>
+                        <div><div class="muted" style="font-size:12px">RISK SCORE</div><div>${o.riskScore}</div></div>
+                    </div>
+                    ${o.addOnProductName ? `<p class="muted" style="margin:6px 0 0">Includes: ${DF.escapeHtml(o.addOnProductName)} (complimentary)</p>` : ""}
+                    ${["ADMIN", "SALES_REP", "SALES_MANAGER"].includes(user.role) && ["DRAFT", "UNDER_NEGOTIATION"].includes(quotation.status)
+                        ? `<button class="btn-outline btn-sm" style="margin-top:10px" onclick="applyNegotiationOption(${lineId}, ${o.discountPercent}, ${o.addOnProductId || "null"})">Apply this option</button>`
+                        : ""}
+                </div>
+            `).join("");
+        } catch (e) {
+            el.innerHTML = "";
+            DF.showError("msg", e);
+        }
+    }
+
+    async function applyNegotiationOption(lineId, discountPercent, addOnProductId) {
+        if (!confirm("Apply this discount to the quotation now?")) return;
+        try {
+            await DF.put(`/api/quotations/${quotationId}/lines/${lineId}`, { discountPercent });
+            if (addOnProductId) {
+                await DF.post(`/api/quotations/${quotationId}/lines`, { productId: addOnProductId, quantity: 1, discountPercent: 100, lineType: "ONE_TIME" });
+            }
+            await refresh();
+            showTab("cart");
+            if (quotation.status !== "PENDING_APPROVAL") alert("Option applied to the quotation. Use \"Submit for approval\" in the Cart tab to send the new terms through the approval chain.");
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    // ---------------------------------------------------------------- What-If Deal Simulator
+    function populateSimulatorSelects() {
+        document.getElementById("simLine").innerHTML = `<option value="">(none - only adding a product)</option>` +
+            quotation.lines.map(l => `<option value="${l.id}">${DF.escapeHtml(l.productName)} (qty ${l.quantity}, ${l.discountPercent}%)</option>`).join("");
+        document.getElementById("simAddProduct").innerHTML = `<option value="">(none)</option>` +
+            products.map(p => `<option value="${p.id}">${DF.escapeHtml(p.name)}</option>`).join("");
+    }
+
+    let lastScenarioRequest = null;
+
+    async function runScenario() {
+        const el = document.getElementById("scenarioResults");
+        el.innerHTML = `<div class="muted">Running scenario...</div>`;
+        try {
+            const changes = [];
+            const lineId = document.getElementById("simLine").value;
+            if (lineId) {
+                const change = { lineId: parseInt(lineId) };
+                const qty = document.getElementById("simQty").value;
+                const disc = document.getElementById("simDiscount").value;
+                if (qty !== "") change.quantity = parseInt(qty);
+                if (disc !== "") change.discountPercent = parseFloat(disc);
+                changes.push(change);
+            }
+            const addProductId = document.getElementById("simAddProduct").value;
+            if (addProductId) {
+                changes.push({
+                    productId: parseInt(addProductId),
+                    quantity: parseInt(document.getElementById("simAddQty").value || "1"),
+                    discountPercent: parseFloat(document.getElementById("simAddDiscount").value || "0")
+                });
+            }
+            if (changes.length === 0) {
+                el.innerHTML = `<div class="empty">Choose a line to change or a product to add first.</div>`;
+                return;
+            }
+            lastScenarioRequest = { changes };
+            const result = await DF.post(`/api/quotations/${quotationId}/scenario/simulate`, lastScenarioRequest);
+            renderScenarioComparison(result);
+        } catch (e) {
+            el.innerHTML = "";
+            DF.showError("msg", e);
+        }
+    }
+
+    function renderScenarioComparison(result) {
+        const c = result.current, s = result.scenario;
+        const better = (scenarioVal, currentVal, higherIsBetter) => {
+            const diff = Number(scenarioVal) - Number(currentVal);
+            if (Math.abs(diff) < 0.005) return "";
+            const isBetter = higherIsBetter ? diff > 0 : diff < 0;
+            return isBetter ? "scenario-better" : "scenario-worse";
+        };
+        document.getElementById("scenarioResults").innerHTML = `
+            <div class="scenario-compare">
+                <div class="scenario-col">
+                    <h3>Current deal</h3>
+                    <div class="scenario-row"><span>Total amount</span><span>${DF.fmtMoney(c.totalAmount)}</span></div>
+                    <div class="scenario-row"><span>Total discount</span><span>${DF.fmtMoney(c.totalDiscountAmount)}</span></div>
+                    <div class="scenario-row"><span>Margin</span><span>${DF.fmtMoney(c.marginAmount)} (${DF.fmtPct(c.marginPercent)})</span></div>
+                    <div class="scenario-row"><span>Blended risk score</span><span>${c.blendedRiskScore}</span></div>
+                    <div class="scenario-row"><span>Approval</span><span>${DF.escapeHtml(c.approvalLabel)}</span></div>
+                    <div class="scenario-row"><span>Est. shipments</span><span>${c.estimatedShipments}</span></div>
+                </div>
+                <div class="scenario-col">
+                    <h3>Scenario</h3>
+                    <div class="scenario-row"><span>Total amount</span><span>${DF.fmtMoney(s.totalAmount)}</span></div>
+                    <div class="scenario-row"><span>Total discount</span><span>${DF.fmtMoney(s.totalDiscountAmount)}</span></div>
+                    <div class="scenario-row"><span>Margin</span><span class="${better(s.marginPercent, c.marginPercent, true)}">${DF.fmtMoney(s.marginAmount)} (${DF.fmtPct(s.marginPercent)})</span></div>
+                    <div class="scenario-row"><span>Blended risk score</span><span class="${better(s.blendedRiskScore, c.blendedRiskScore, false)}">${s.blendedRiskScore}</span></div>
+                    <div class="scenario-row"><span>Approval</span><span>${DF.escapeHtml(s.approvalLabel)}</span></div>
+                    <div class="scenario-row"><span>Est. shipments</span><span>${s.estimatedShipments}</span></div>
+                </div>
+            </div>
+            ${["ADMIN", "SALES_REP", "SALES_MANAGER"].includes(user.role) && ["DRAFT", "UNDER_NEGOTIATION"].includes(quotation.status)
+                ? `<button class="btn-success" style="margin-top:14px" onclick="applyScenario()">Apply Scenario</button>`
+                : `<p class="muted" style="margin-top:10px">Scenarios can be applied while the quotation is a Draft or Under Negotiation.</p>`}
+            <button class="btn-outline" style="margin-top:14px;margin-left:8px" onclick="document.getElementById('scenarioResults').innerHTML=''">Discard</button>
+        `;
+    }
+
+    async function applyScenario() {
+        if (!lastScenarioRequest) return;
+        if (!confirm("Apply this scenario to the real quotation now?")) return;
+        try {
+            await DF.post(`/api/quotations/${quotationId}/scenario/apply`, lastScenarioRequest);
+            lastScenarioRequest = null;
+            document.getElementById("scenarioResults").innerHTML = `<div class="success-box">Scenario applied.</div>`;
+            await refresh();
+            showTab("cart");
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    // ---------------------------------------------------------------- Deal Timeline
+    async function loadTimeline() {
+        const el = document.getElementById("timelineList");
+        el.innerHTML = `<div class="muted">Loading...</div>`;
+        try {
+            const events = await DF.get(`/api/quotations/${quotationId}/timeline`);
+            el.innerHTML = events.length ? events.map(e => `
+                <div class="timeline-item">
+                    <div class="timeline-dot ${e.status === 'AUTOMATED' ? 'automated' : ''}"></div>
+                    <div class="flex-between">
+                        <strong>${DF.escapeHtml(e.eventName)}</strong>
+                        <span class="timeline-when">${DF.fmtDateTime(e.timestamp)}</span>
+                    </div>
+                    <div class="muted" style="font-size:13px">${DF.escapeHtml(e.actor || "")}${e.status ? ' &middot; ' + DF.escapeHtml(e.status) : ''}</div>
+                    ${e.detail ? `<div style="font-size:13px;margin-top:2px">${DF.escapeHtml(e.detail)}</div>` : ""}
+                </div>
+            `).join("") : `<div class="empty">No events yet.</div>`;
+        } catch (e) { el.innerHTML = `<div class="empty">Could not load timeline.</div>`; }
+    }
+
+    loadAll();
+</script>
+</body>
+</html>

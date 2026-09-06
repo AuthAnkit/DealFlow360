@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Products - DealFlow360</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div id="nav"></div>
+<div class="page">
+    <h1>Backend Setup</h1>
+    <p class="subtitle">A2 - Product &amp; Price List Management</p>
+
+    <div class="subnav">
+        <a href="/admin-products.html" class="active">Products</a>
+        <a href="/admin-warehouses.html">Warehouses &amp; Stock</a>
+        <a href="/admin-discounts.html">Discount &amp; Approval Chain</a>
+        <a href="/admin-subscriptions.html">Subscription Plans</a>
+        <a href="/admin-upsell.html">Recommendation Rules</a>
+        <a href="/admin-customers.html">Customers</a>
+        <a href="/admin-users.html">Staff Users</a>
+    </div>
+
+    <div id="msg"></div>
+
+    <div class="card" id="demoCard" style="display:none">
+        <div class="flex-between">
+            <div>
+                <h2 class="mt-0">Demo data set</h2>
+                <p class="muted" style="margin:0">A real base catalog (~450 products, 60 customers, 8 sales reps) built through the real
+                    quotation/approval/fulfillment/billing services. Loads automatically on a fresh database; use this on a database that
+                    already existed. Everything past the base is manual - add exactly as many quotations, extra products, extra customers
+                    and extra reps as you want, as many times as you want, to grow the set to any size (1000+, 5000+, whatever you need).</p>
+            </div>
+            <div style="white-space:nowrap;text-align:right">
+                <span id="demoStatus" class="badge">-</span>
+                <div class="muted" id="demoCounts" style="font-size:12px;margin-top:4px"></div>
+            </div>
+        </div>
+        <div class="grid grid-4" style="margin-top:12px;align-items:end">
+            <div><label>Quotations to add</label><input id="demoQuotations" type="number" min="0" max="5000" value="300"></div>
+            <div><label>Extra products to add <span class="muted">(variants of the catalog)</span></label><input id="demoProducts" type="number" min="0" max="5000" value="0"></div>
+            <div><label>Extra customers to add <span class="muted">(generated companies)</span></label><input id="demoCustomers" type="number" min="0" max="5000" value="0"></div>
+            <div><label>Extra sales reps to add</label><input id="demoReps" type="number" min="0" max="500" value="0"></div>
+        </div>
+        <div style="margin-top:10px"><button class="btn-primary" id="btnLoadDemo" onclick="loadDemoData()">Add demo data</button></div>
+        <p class="muted" style="font-size:12px;margin:8px 0 0">The first run also builds the base catalog (skipped by name/username on later runs, so it never
+            duplicates). Every field above is optional and purely additive - leave any at 0 to skip it, or run this repeatedly with big numbers
+            (e.g. quotations=1000, extra customers=1000, extra products=700) to push every category past 1000 yourself.</p>
+    </div>
+
+    <div class="card" id="formCard">
+        <h2>Add product</h2>
+        <div class="grid grid-3">
+            <div><label>Name</label><input id="fName"></div>
+            <div><label>Category</label><input id="fCategory" placeholder="Hardware / Service / Subscription"></div>
+            <div><label>Unit</label><input id="fUnit" value="unit"></div>
+            <div><label>Price</label><input id="fPrice" type="number" step="0.01"></div>
+            <div><label>Cost</label><input id="fCost" type="number" step="0.01"></div>
+            <div><label>Tax %</label><input id="fTax" type="number" step="0.01" value="0"></div>
+        </div>
+        <label>Description</label>
+        <input id="fDescription">
+        <label>Image URL <span class="muted">(optional - a link to a product photo; leave blank for a category icon)</span></label>
+        <input id="fImageUrl" placeholder="https://...">
+        <button class="btn-primary" style="margin-top:14px" onclick="createProduct()">Add product</button>
+    </div>
+
+    <div class="card" id="priceListCard">
+        <h2>Tier price lists <span class="muted" style="font-size:13px;font-weight:normal">(A2 - customer tier based pricing)</span></h2>
+        <p class="muted" style="margin-top:0">A tier price replaces the catalog price for customers of that tier when a line is added to a quotation.
+            Products without a row use the catalog price. Discounts on top are still governed by the discount ceilings.</p>
+        <div class="grid grid-3" id="priceListForm">
+            <div><label>Tier</label><select id="plTier"><option>BRONZE</option><option>SILVER</option><option selected>GOLD</option></select></div>
+            <div><label>Product</label><select id="plProduct"></select></div>
+            <div><label>Tier price</label><input id="plPrice" type="number" step="0.01" min="0"></div>
+        </div>
+        <button class="btn-primary" style="margin-top:14px" id="plSave" onclick="savePriceList()">Save tier price</button>
+        <table style="margin-top:14px">
+            <thead><tr><th>Tier</th><th>Product</th><th>Catalog price</th><th>Tier price</th><th>Currency</th><th></th></tr></thead>
+            <tbody id="priceListRows"><tr><td colspan="6" class="empty">Loading...</td></tr></tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Catalog</h2>
+        <table>
+            <thead><tr><th></th><th>Name</th><th>Category</th><th>Price</th><th>Cost</th><th>Margin</th><th>Tax</th><th>Variants</th><th></th></tr></thead>
+            <tbody id="rows"><tr><td colspan="9" class="empty">Loading...</td></tr></tbody>
+        </table>
+    </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+    const user = DF.requireRole(["ADMIN", "SALES_MANAGER"]);
+    DF.renderNav("admin");
+    if (user.role !== "ADMIN") document.getElementById("formCard").style.display = "none";
+
+    let products = [];
+
+    async function loadDemoStatus() {
+        if (user.role !== "ADMIN") return;
+        try {
+            const st = await DF.get("/api/admin/demo-data");
+            document.getElementById("demoCard").style.display = "block";
+            document.getElementById("demoStatus").textContent = st.loaded ? "Base catalog loaded" : "Base catalog not loaded";
+            document.getElementById("demoStatus").className = "badge " + (st.loaded ? "badge-approved" : "badge-pending");
+            document.getElementById("demoCounts").textContent = `${st.products} products · ${st.quotations} quotations · ${st.customers} customers · ${st.salesReps} sales reps in the database`;
+        } catch (e) { /* non-fatal */ }
+    }
+
+    async function loadDemoData() {
+        const quotations = Math.max(0, parseInt(document.getElementById("demoQuotations").value || "0"));
+        const extraProducts = Math.max(0, parseInt(document.getElementById("demoProducts").value || "0"));
+        const extraCustomers = Math.max(0, parseInt(document.getElementById("demoCustomers").value || "0"));
+        const extraReps = Math.max(0, parseInt(document.getElementById("demoReps").value || "0"));
+        if (!confirm(`Add ${quotations} quotations, ${extraProducts} extra products, ${extraCustomers} extra customers and ${extraReps} extra sales reps to this database now? (Nothing is deleted; the base catalog is built first if missing.)`)) return;
+        const btn = document.getElementById("btnLoadDemo");
+        btn.disabled = true; btn.textContent = "Adding... (this can take a minute or more for large batches)";
+        DF.clearMessage("msg");
+        try {
+            const s = await DF.post(`/api/admin/demo-data/load?quotations=${quotations}&extraProducts=${extraProducts}&extraCustomers=${extraCustomers}&extraReps=${extraReps}`);
+            const box = document.getElementById("msg");
+            box.className = "success-box"; box.style.display = "block";
+            box.textContent = `Added ${s.quotations} quotations (now ${s.totalQuotations}), ${s.newProducts} extra products (now ${s.products} products), `
+                + `${s.newCustomers} extra customers (now ${s.customers} customers), ${s.newReps} extra sales reps (now ${s.salesReps} reps), `
+                + `${s.rules} new recommendation rules - ${(s.millis / 1000).toFixed(1)} s.`;
+            await load(); await loadDemoStatus();
+        } catch (e) { DF.showError("msg", e); }
+        btn.disabled = false; btn.textContent = "Add demo data";
+    }
+
+    async function load() {
+        try {
+            products = await DF.get("/api/products");
+            const rows = document.getElementById("rows");
+            if (products.length === 0) { rows.innerHTML = `<tr><td colspan="9" class="empty">No products yet.</td></tr>`; return; }
+
+            const withVariants = await Promise.all(products.map(p => DF.get(`/api/products/${p.id}/variants`)));
+            document.getElementById("plProduct").innerHTML = products.map(p => `<option value="${p.id}">${DF.escapeHtml(p.name)} (${DF.fmtMoney(p.price)})</option>`).join("");
+            loadPriceList();
+
+            rows.innerHTML = products.map((p, i) => {
+                const margin = p.price > 0 ? (((p.price - p.cost) / p.price) * 100).toFixed(1) + "%" : "-";
+                const variants = withVariants[i];
+                const variantHtml = variants.length
+                    ? variants.map(v => `${DF.escapeHtml(v.attributeName)}: ${DF.escapeHtml(v.attributeValue)} (+${DF.fmtMoney(v.extraPrice)})`).join("<br>")
+                    : '<span class="muted">none</span>';
+                return `<tr>
+                    <td>${DF.productThumb(p.imageUrl, p.category, 36)}</td>
+                    <td>${DF.escapeHtml(p.name)}</td>
+                    <td>${DF.escapeHtml(p.category)}</td>
+                    <td>${DF.fmtMoney(p.price)}</td>
+                    <td>${DF.fmtMoney(p.cost)}</td>
+                    <td>${margin}</td>
+                    <td>${p.taxPercent}%${p.active === false ? '<div><span class="badge badge-rejected">Inactive</span></div>' : ""}</td>
+                    <td style="font-size:12px">${variantHtml}</td>
+                    <td style="white-space:nowrap">${user.role === "ADMIN" ? `
+                        <button class="btn-outline btn-sm" onclick="toggleActive(${p.id})">${p.active === false ? "Activate" : "Deactivate"}</button>
+                        <button class="btn-outline btn-sm" onclick="addVariant(${p.id})">+ Variant</button>
+                        <button class="btn-outline btn-sm" onclick="setImage(${p.id})">Set image</button>
+                        <button class="btn-outline btn-sm" onclick="removeProduct(${p.id})">Delete</button>
+                    ` : ""}</td>
+                </tr>`;
+            }).join("");
+        } catch (e) {
+            DF.showError("msg", e);
+        }
+    }
+
+    async function createProduct() {
+        DF.clearMessage("msg");
+        try {
+            await DF.post("/api/products", {
+                name: document.getElementById("fName").value,
+                category: document.getElementById("fCategory").value,
+                unit: document.getElementById("fUnit").value,
+                price: parseFloat(document.getElementById("fPrice").value || "0"),
+                cost: parseFloat(document.getElementById("fCost").value || "0"),
+                taxPercent: parseFloat(document.getElementById("fTax").value || "0"),
+                description: document.getElementById("fDescription").value,
+                imageUrl: document.getElementById("fImageUrl").value || null
+            });
+            ["fName", "fCategory", "fDescription", "fImageUrl"].forEach(id => document.getElementById(id).value = "");
+            load();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    // ---- A2 tier price lists
+    async function loadPriceList() {
+        try {
+            const entries = await DF.get("/api/config/price-lists");
+            const canEdit = ["ADMIN", "SALES_MANAGER"].includes(user.role);
+            document.getElementById("priceListForm").style.display = canEdit ? "grid" : "none";
+            document.getElementById("plSave").style.display = canEdit ? "inline-block" : "none";
+            const rows = document.getElementById("priceListRows");
+            rows.innerHTML = entries.length ? entries.sort((a, b) => a.tier.localeCompare(b.tier) || a.productName.localeCompare(b.productName)).map(e => `
+                <tr><td><span class="badge">${e.tier}</span></td><td>${DF.escapeHtml(e.productName)}</td>
+                <td>${DF.fmtMoney(e.catalogPrice)}</td><td><strong>${DF.fmtMoney(e.price)}</strong></td><td>${DF.escapeHtml(e.currency || "")}</td>
+                <td>${canEdit ? `<button class="btn-outline btn-sm" onclick="deletePriceList(${e.id})">Remove</button>` : ""}</td></tr>
+            `).join("") : `<tr><td colspan="6" class="empty">No tier prices configured - every tier pays the catalog price.</td></tr>`;
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function savePriceList() {
+        DF.clearMessage("msg");
+        try {
+            await DF.post("/api/config/price-lists", {
+                tier: document.getElementById("plTier").value,
+                productId: parseInt(document.getElementById("plProduct").value),
+                price: parseFloat(document.getElementById("plPrice").value)
+            });
+            document.getElementById("plPrice").value = "";
+            loadPriceList();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function deletePriceList(id) {
+        if (!confirm("Remove this tier price? The tier will fall back to the catalog price.")) return;
+        try { await DF.del("/api/config/price-lists/" + id); loadPriceList(); } catch (e) { DF.showError("msg", e); }
+    }
+
+    // ---- A2 variants ("Attribute (Size or Pack), Values, Extra prices")
+    async function addVariant(productId) {
+        DF.clearMessage("msg");
+        const attributeName = prompt("Variant attribute (e.g. Size, Pack, Colour):", "Size");
+        if (attributeName === null || !attributeName.trim()) return;
+        const attributeValue = prompt("Value for " + attributeName + " (e.g. Large, 5-pack):", "");
+        if (attributeValue === null || !attributeValue.trim()) return;
+        const extra = prompt("Extra price for this variant (0 for none):", "0");
+        if (extra === null) return;
+        try {
+            await DF.post(`/api/products/${productId}/variants`, { attributeName: attributeName.trim(), attributeValue: attributeValue.trim(), extraPrice: parseFloat(extra || "0") });
+            load();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    // An inactive product stays on past quotations but disappears from the Quotation Builder, the
+    // customer catalog and the recommendation engine - safer than deleting a product that is referenced.
+    async function toggleActive(id) {
+        DF.clearMessage("msg");
+        const product = products.find(p => p.id === id);
+        if (!product) return;
+        try {
+            await DF.put(`/api/products/${id}`, { ...product, active: product.active === false });
+            load();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function setImage(id) {
+        DF.clearMessage("msg");
+        const product = products.find(p => p.id === id);
+        if (!product) return;
+        const imageUrl = prompt("Image URL for \"" + product.name + "\" (leave blank to remove):", product.imageUrl || "");
+        if (imageUrl === null) return;
+        try {
+            await DF.put(`/api/products/${id}`, { ...product, imageUrl: imageUrl || null });
+            load();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function removeProduct(id) {
+        if (!confirm("Delete this product?")) return;
+        try { await DF.del("/api/products/" + id); load(); } catch (e) { DF.showError("msg", e); }
+    }
+
+    load();
+    loadDemoStatus();
+</script>
+</body>
+</html>

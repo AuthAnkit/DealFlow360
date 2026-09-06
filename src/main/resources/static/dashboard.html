@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard - DealFlow360</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div id="nav"></div>
+<div class="page">
+    <h1 id="greeting">Welcome</h1>
+    <p class="subtitle" id="roleLine"></p>
+
+    <div class="grid grid-3" id="kpis"></div>
+
+    <div class="card">
+        <h2>Quick links</h2>
+        <div class="flex gap-8" style="flex-wrap:wrap">
+            <a class="btn btn-primary" href="/quotations.html">Open Quotations Workspace</a>
+            <a class="btn btn-outline" id="linkDealHealth" href="/deal-health.html" style="display:none">Deal Health Dashboard</a>
+            <a class="btn btn-outline" id="linkReports" href="/reports.html" style="display:none">Reports</a>
+            <a class="btn btn-outline" id="linkAdmin" href="/admin-products.html" style="display:none">Backend Setup</a>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>About this build</h2>
+        <p class="muted" style="line-height:1.6">
+            DealFlow360 is a self-governing sales operations platform: quotations are auto-routed for
+            discount approval using a blended risk score, fulfillment is auto-split across warehouses based on
+            live stock, subscriptions bill and prorate on their own schedule, customers negotiate directly in a
+            separate restricted portal, and the Deal Health dashboard surfaces stalled deals, discount anomalies
+            and delivery slippage in real time.
+        </p>
+    </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+    const user = DF.requireRole(["ADMIN", "SALES_REP", "SALES_MANAGER", "FINANCE"]);
+    DF.renderNav("dashboard");
+    document.getElementById("greeting").textContent = "Welcome, " + user.fullName;
+    document.getElementById("roleLine").textContent = "Signed in as " + user.role.replace("_", " ");
+
+    const isManagerish = ["SALES_MANAGER", "FINANCE", "ADMIN"].includes(user.role);
+    if (isManagerish) {
+        document.getElementById("linkDealHealth").style.display = "inline-block";
+        document.getElementById("linkReports").style.display = "inline-block";
+    }
+    if (user.role === "ADMIN" || user.role === "SALES_MANAGER") {
+        document.getElementById("linkAdmin").style.display = "inline-block";
+    }
+
+    async function loadKpis() {
+        const kpiEl = document.getElementById("kpis");
+        try {
+            const quotations = await DF.get("/api/quotations");
+            const open = quotations.filter(q => !["CONFIRMED", "REJECTED"].includes(q.status));
+            const pipelineValue = open.reduce((sum, q) => sum + Number(q.totalAmount || 0), 0);
+            const confirmed = quotations.filter(q => q.status === "CONFIRMED");
+
+            let extra = "";
+            if (isManagerish) {
+                const health = await DF.get("/api/dashboard/deal-health");
+                const alertCount = health.stalledDeals.length + health.discountAnomalies.length + health.deliverySlippages.length
+                    + health.marginAnomalies.length + health.negotiationLoops.length + health.approvalDelays.length;
+                extra = `
+                    <div class="card kpi"><div class="value">${alertCount}</div><div class="label">Open deal-health alerts</div></div>
+                `;
+            }
+
+            kpiEl.innerHTML = `
+                <div class="card kpi"><div class="value">${quotations.length}</div><div class="label">Total quotations</div></div>
+                <div class="card kpi"><div class="value">${open.length}</div><div class="label">Open / in-progress</div></div>
+                <div class="card kpi"><div class="value">${DF.fmtMoney(pipelineValue)}</div><div class="label">Open pipeline value</div></div>
+                ${extra}
+                <div class="card kpi"><div class="value">${confirmed.length}</div><div class="label">Confirmed deals</div></div>
+            `;
+        } catch (e) {
+            kpiEl.innerHTML = `<div class="card">Could not load KPIs: ${DF.escapeHtml(e.message)}</div>`;
+        }
+    }
+    loadKpis();
+</script>
+</body>
+</html>

@@ -1,0 +1,346 @@
+/* DealFlow360 - simple, clean styling. No frameworks, no build step. */
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #f4f5f7;
+    color: #1f2430;
+}
+
+a { color: #2f6fed; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ---------------------------------------------------------- layout */
+
+.page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 24px 20px 60px;
+}
+
+.page-narrow {
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 24px 20px 60px;
+}
+
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 17px; margin: 0 0 12px; }
+h3 { font-size: 14px; margin: 0 0 8px; color: #48506b; text-transform: uppercase; letter-spacing: .04em; }
+.subtitle { color: #666f8c; margin: 0 0 20px; font-size: 14px; }
+
+.grid { display: grid; gap: 16px; }
+.grid-2 { grid-template-columns: 1fr 1fr; }
+.grid-3 { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 800px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+/* ---------------------------------------------------------- nav */
+
+#nav {
+    background: #14213d;
+    color: #fff;
+    margin-bottom: 24px;
+}
+.nav-inner {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+.nav-inner .brand { font-weight: 700; letter-spacing: .02em; margin-right: 8px; }
+.nav-links { display: flex; gap: 16px; flex: 1; flex-wrap: wrap; }
+.nav-links a { color: #c7d2f0; font-size: 14px; }
+.nav-links a.active, .nav-links a:hover { color: #fff; text-decoration: none; }
+.nav-user { font-size: 13px; color: #c7d2f0; display: flex; align-items: center; gap: 8px; }
+.link-btn {
+    background: none; border: 1px solid #3a4a75; color: #c7d2f0; padding: 4px 10px;
+    border-radius: 4px; cursor: pointer; font-size: 12px;
+}
+.link-btn:hover { background: #1e2c52; }
+
+.subnav { display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap; }
+.subnav a {
+    padding: 6px 12px; border-radius: 6px; font-size: 13px; color: #48506b; background: #fff;
+    border: 1px solid #e2e5ec;
+}
+.subnav a.active { background: #14213d; color: #fff; border-color: #14213d; }
+
+/* ---------------------------------------------------------- cards */
+
+.card {
+    background: #fff;
+    border: 1px solid #e6e8ee;
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 18px;
+}
+.card-tight { padding: 14px 16px; }
+
+.kpi { text-align: left; }
+.kpi .value { font-size: 26px; font-weight: 700; }
+.kpi .label { font-size: 12px; color: #7b8299; text-transform: uppercase; letter-spacing: .04em; }
+
+/* ---------------------------------------------------------- forms */
+
+label { display: block; font-size: 12px; color: #565f7d; margin: 10px 0 4px; }
+input, select, textarea {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #d7dae3;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    background: #fff;
+    color: #1f2430;
+}
+input:focus, select:focus, textarea:focus { outline: none; border-color: #2f6fed; }
+.field-row { display: flex; gap: 10px; }
+.field-row > div { flex: 1; }
+
+/* ---------------------------------------------------------- buttons */
+
+button, .btn {
+    display: inline-block;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    background: #eef0f5;
+    color: #1f2430;
+}
+button:hover, .btn:hover { opacity: .88; text-decoration: none; }
+.btn-primary { background: #2f6fed; color: #fff; }
+.btn-success { background: #1e9e6b; color: #fff; }
+.btn-danger { background: #d64545; color: #fff; }
+.btn-outline { background: #fff; border: 1px solid #d7dae3; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ---------------------------------------------------------- tables */
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid #eef0f5; }
+th { color: #7b8299; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
+tr:hover td { background: #fafbfd; }
+
+/* ---------------------------------------------------------- badges */
+
+.badge {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    background: #e9ebf1;
+    color: #48506b;
+}
+.badge-draft { background: #e9ebf1; color: #48506b; }
+.badge-pending { background: #fff2d6; color: #9a6b00; }
+/* DF.badgeClass() lowercases the status and turns "_" into "-", so Quotation.Status
+   PENDING_APPROVAL and UNDER_NEGOTIATION need their own exact class names here too -
+   without these, every status badge across the app (quotations list, reports, the
+   Quotation Builder, both portal screens) silently fell back to plain gray for these
+   two statuses instead of the intended amber/blue. */
+.badge-pending-approval { background: #fff2d6; color: #9a6b00; }
+.badge-approved { background: #dff4e8; color: #1e7a4c; }
+.badge-rejected { background: #fbe2e2; color: #af2b2b; }
+.badge-negotiation { background: #e3ecfd; color: #2f56b5; }
+.badge-under-negotiation { background: #e3ecfd; color: #2f56b5; }
+.badge-confirmed { background: #d9f3ff; color: #106a8c; }
+.badge-high { background: #fbe2e2; color: #af2b2b; }
+.badge-medium { background: #fff2d6; color: #9a6b00; }
+.badge-low { background: #e9ebf1; color: #48506b; }
+
+/* ---------------------------------------------------------- misc */
+
+.muted { color: #8790a6; }
+.error-box { background: #fbe2e2; color: #a12727; padding: 10px 14px; border-radius: 6px; margin: 12px 0; font-size: 13px; }
+.success-box { background: #dff4e8; color: #1e7a4c; padding: 10px 14px; border-radius: 6px; margin: 12px 0; font-size: 13px; }
+.info-box { background: #e3ecfd; color: #2f56b5; padding: 10px 14px; border-radius: 6px; margin: 12px 0; font-size: 13px; }
+.empty { color: #97a0b8; font-style: italic; padding: 14px 0; }
+
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid #e2e5ec; margin-bottom: 18px; flex-wrap: wrap; }
+.tabs button {
+    background: none; border: none; border-bottom: 2px solid transparent;
+    border-radius: 0; padding: 10px 14px; color: #7b8299; font-weight: 600;
+}
+.tabs button.active { color: #14213d; border-bottom-color: #2f6fed; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.login-card { margin-top: 60px; }
+.login-tabs { display: flex; margin-bottom: 18px; border-radius: 8px; overflow: hidden; border: 1px solid #d7dae3; }
+.login-tabs button { flex: 1; border-radius: 0; background: #fff; }
+.login-tabs button.active { background: #14213d; color: #fff; }
+
+.risk-meter { height: 8px; border-radius: 4px; background: #eef0f5; overflow: hidden; margin-top: 6px; }
+.risk-meter > div { height: 100%; background: linear-gradient(90deg, #2f6fed, #d64545); }
+
+.flex { display: flex; align-items: center; }
+.flex-between { display: flex; align-items: center; justify-content: space-between; }
+.gap-8 { gap: 8px; }
+.mt-0 { margin-top: 0; }
+.text-right { text-align: right; }
+
+/* ---------------------------------------------------------- chart (Trends) */
+
+.df-chart { width: 100%; height: auto; display: block; }
+.chart-legend { display: flex; gap: 18px; margin-top: 10px; flex-wrap: wrap; }
+.chart-legend-item { font-size: 12px; color: #565c66; display: inline-flex; align-items: center; gap: 6px; }
+.chart-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.momentum-up { color: #1e7a4c; font-weight: 700; }
+.momentum-down { color: #af2b2b; font-weight: 700; }
+.momentum-flat { color: #7b8299; font-weight: 700; }
+
+/* ---------------------------------------------------------- automation */
+
+.badge-automated { background: #ece3fd; color: #5b32b5; }
+.upload-drop { border: 1px dashed #c7cbd1; border-radius: 8px; padding: 18px; text-align: center; background: #fafbfd; }
+.automation-item { border-bottom: 1px solid #eef0f5; padding: 10px 0; }
+.automation-item:last-child { border-bottom: none; }
+
+/* ---------------------------------------------------------- deal intelligence */
+
+.insight { border-left: 3px solid #c7cbd1; border-radius: 4px; background: #fafbfd; padding: 10px 12px; margin-bottom: 8px; }
+.insight-title { font-weight: 600; font-size: 13px; }
+.insight-message { color: #565c66; font-size: 13px; margin-top: 3px; line-height: 1.5; }
+.insight-warning { border-left-color: #d38b00; background: #fff8ec; }
+.insight-risk { border-left-color: #af2b2b; background: #fdf1f1; }
+.insight-recommendation { border-left-color: #2f6fed; background: #eef3ff; }
+.insight-positive { border-left-color: #1e7a4c; background: #eefaf3; }
+
+.score-badge { display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%; font-size: 22px; font-weight: 700; color: #fff; }
+.score-healthy { background: #1e9e6b; }
+.score-attention { background: #d38b00; }
+.score-at-risk { background: #d64545; }
+.band-healthy { color: #1e7a4c; font-weight: 700; }
+.band-attention_needed { color: #9a6b00; font-weight: 700; }
+.band-at_risk { color: #af2b2b; font-weight: 700; }
+
+.factor-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; border-bottom: 1px solid #f0f1f5; }
+.factor-row:last-child { border-bottom: none; }
+.factor-points { font-weight: 700; color: #af2b2b; }
+
+.scenario-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 800px) { .scenario-compare { grid-template-columns: 1fr; } }
+.scenario-col { border: 1px solid #e2e5ec; border-radius: 8px; padding: 14px; }
+.scenario-col h3 { margin-top: 0; }
+.scenario-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; }
+.scenario-better { color: #1e7a4c; font-weight: 700; }
+.scenario-worse { color: #af2b2b; font-weight: 700; }
+
+.option-card { border: 1px solid #e2e5ec; border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+.option-card h3 { margin: 0 0 6px; text-transform: none; font-size: 15px; color: #1f2430; letter-spacing: normal; }
+
+.warehouse-mode-card { border: 1px solid #e2e5ec; border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+.warehouse-mode-card h3 { margin: 0 0 6px; text-transform: none; font-size: 15px; color: #1f2430; letter-spacing: normal; }
+
+.timeline { position: relative; padding-left: 22px; }
+.timeline-item { position: relative; padding-bottom: 18px; border-left: 2px solid #e2e5ec; padding-left: 18px; margin-left: 4px; }
+.timeline-item:last-child { border-left-color: transparent; padding-bottom: 0; }
+.timeline-dot { position: absolute; left: -7px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: #2f6fed; border: 2px solid #fff; }
+.timeline-dot.automated { background: #5b32b5; }
+.timeline-when { font-size: 12px; color: #97a0b8; }
+
+/* ---------------------------------------------------------- product thumbnails + e-commerce style portal */
+
+.product-thumb {
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 8px; object-fit: cover; flex-shrink: 0;
+}
+.product-thumb-fallback { font-size: 20px; }
+
+.item-row { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid #f0f1f5; }
+.item-row:last-child { border-bottom: none; }
+.item-row .item-info { flex: 1; min-width: 0; }
+.item-row .item-name { font-weight: 600; }
+.item-row .item-meta { font-size: 12px; color: #8790a6; margin-top: 2px; }
+.item-row .item-price { text-align: right; white-space: nowrap; }
+.item-row .item-price .was { text-decoration: line-through; color: #97a0b8; font-size: 12px; margin-right: 6px; }
+
+.order-card { padding: 0; overflow: hidden; }
+.order-card-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 20px; background: #fafbfd; border-bottom: 1px solid #eef0f5; flex-wrap: wrap; gap: 8px;
+}
+.order-card-header .label { font-size: 11px; color: #97a0b8; text-transform: uppercase; letter-spacing: .04em; }
+.order-card-header .value { font-weight: 600; }
+.order-card-thumbs { display: flex; padding: 16px 20px; gap: -8px; }
+.order-card-thumbs .product-thumb { margin-right: -10px; border: 2px solid #fff; }
+.order-card-footer { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-top: 1px solid #eef0f5; }
+
+.summary-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }
+.summary-row.total { border-top: 1px solid #e2e5ec; margin-top: 6px; padding-top: 12px; font-size: 16px; font-weight: 700; }
+.summary-row .muted-label { color: #8790a6; }
+
+.stepper { display: flex; align-items: center; margin: 6px 0 22px; }
+.stepper-step { display: flex; flex-direction: column; align-items: center; flex: 1; position: relative; }
+.stepper-dot {
+    width: 26px; height: 26px; border-radius: 50%; background: #e9ebf1; color: #7b8299;
+    display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; z-index: 1;
+}
+.stepper-step.done .stepper-dot { background: #1e9e6b; color: #fff; }
+.stepper-step.current .stepper-dot { background: #2f6fed; color: #fff; }
+.stepper-step.rejected .stepper-dot { background: #d64545; color: #fff; }
+.stepper-label { font-size: 11px; color: #7b8299; margin-top: 6px; text-align: center; }
+.stepper-step.done .stepper-label, .stepper-step.current .stepper-label { color: #1f2430; font-weight: 600; }
+.stepper-line { position: absolute; top: 13px; left: -50%; width: 100%; height: 2px; background: #e9ebf1; z-index: 0; }
+.stepper-step.done .stepper-line, .stepper-step.current .stepper-line { background: #1e9e6b; }
+.stepper-step:first-child .stepper-line { display: none; }
+
+.chat-thread { display: flex; flex-direction: column; gap: 10px; }
+.chat-bubble { max-width: 78%; padding: 10px 14px; border-radius: 12px; background: #f2f4f8; }
+.chat-bubble.from-customer { align-self: flex-end; background: #2f6fed; color: #fff; }
+.chat-bubble.from-customer .chat-meta { color: #d7e2fb; }
+.chat-bubble .chat-meta { font-size: 11px; color: #8790a6; margin-bottom: 3px; display: flex; justify-content: space-between; gap: 10px; }
+.chat-bubble .chat-counter { display: inline-block; margin-bottom: 4px; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 700; background: rgba(255,255,255,.25); }
+.chat-bubble.from-rep .chat-counter { background: #fff2d6; color: #9a6b00; }
+
+.ecom-banner {
+    border-radius: 12px; padding: 22px 26px; margin-bottom: 20px; color: #fff;
+    background: linear-gradient(120deg, #14213d, #1e2c52 60%, #2f3e6e);
+}
+.ecom-banner h1 { color: #fff; margin-bottom: 2px; }
+.ecom-banner .subtitle { color: #c7d2f0; margin-bottom: 0; }
+
+/* -------------------------------------------------- product catalog / self-service cart */
+
+.grid-4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 1050px) { .grid-4 { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .grid-4 { grid-template-columns: 1fr; } }
+
+.product-card { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.product-card .product-thumb { width: 100% !important; height: 120px !important; border-radius: 8px; font-size: 40px !important; }
+.product-card .product-thumb.img-thumb { object-fit: cover; }
+.product-card .product-name { font-weight: 600; font-size: 14px; }
+.product-card .product-desc { font-size: 12px; color: #8790a6; flex: 1; min-height: 32px; }
+.product-card .product-price { font-weight: 700; font-size: 16px; }
+.product-card .product-price .unit { font-weight: 400; font-size: 11px; color: #97a0b8; }
+.product-card .add-row { display: flex; gap: 8px; align-items: center; }
+.product-card .add-row input[type=number] { width: 64px; flex: none; }
+.product-card .add-row button { flex: 1; }
+.category-pills { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+.category-pills button { background: #fff; border: 1px solid #d7dae3; }
+.category-pills button.active { background: #14213d; color: #fff; border-color: #14213d; }
+
+.cart-panel { position: sticky; top: 20px; }
+.cart-line { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f0f1f5; }
+.cart-line:last-child { border-bottom: none; }
+.cart-line .cart-line-info { flex: 1; min-width: 0; }
+.cart-line .cart-line-name { font-weight: 600; font-size: 13px; }
+.cart-line .cart-line-qty { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.cart-line .cart-line-qty input { width: 52px; padding: 4px 6px; }
+.cart-line .cart-line-price { font-weight: 600; font-size: 13px; white-space: nowrap; }
+.cart-fab {
+    position: fixed; bottom: 24px; right: 24px; z-index: 20; border-radius: 30px;
+    padding: 12px 22px; box-shadow: 0 6px 18px rgba(20,33,61,.35); font-size: 14px;
+}
+@media (max-width: 900px) { .cart-panel { position: static; } }

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Staff Users - DealFlow360</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div id="nav"></div>
+<div class="page">
+    <h1>Backend Setup</h1>
+    <p class="subtitle">Internal staff accounts - Sales Rep / Sales Manager / Finance / Admin logins</p>
+
+    <div class="subnav">
+        <a href="/admin-products.html">Products</a>
+        <a href="/admin-warehouses.html">Warehouses &amp; Stock</a>
+        <a href="/admin-discounts.html">Discount &amp; Approval Chain</a>
+        <a href="/admin-subscriptions.html">Subscription Plans</a>
+        <a href="/admin-upsell.html">Recommendation Rules</a>
+        <a href="/admin-customers.html">Customers</a>
+        <a href="/admin-users.html" class="active">Staff Users</a>
+    </div>
+
+    <div id="msg"></div>
+
+    <div class="card" id="formCard">
+        <h2>Add staff user</h2>
+        <p class="muted" style="margin-top:0">Creates a new internal login - not for customers (use the Customers page for portal accounts).</p>
+        <div class="grid grid-2">
+            <div><label>Full name</label><input id="uFullName"></div>
+            <div><label>Email</label><input id="uEmail"></div>
+            <div><label>Username</label><input id="uUsername" autocomplete="off"></div>
+            <div><label>Password</label><input id="uPassword" type="password" autocomplete="new-password"></div>
+            <div>
+                <label>Role</label>
+                <select id="uRole">
+                    <option value="SALES_REP">Sales Rep</option>
+                    <option value="SALES_MANAGER">Sales Manager</option>
+                    <option value="FINANCE">Finance</option>
+                    <option value="ADMIN">Admin</option>
+                </select>
+            </div>
+        </div>
+        <button class="btn-primary" style="margin-top:14px" onclick="createUser()">Add user</button>
+    </div>
+
+    <div class="card">
+        <h2>Staff users</h2>
+        <table>
+            <thead><tr><th>Name</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead>
+            <tbody id="rows"><tr><td colspan="6" class="empty">Loading...</td></tr></tbody>
+        </table>
+    </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+    const user = DF.requireRole(["ADMIN", "SALES_MANAGER", "FINANCE"]);
+    DF.renderNav("admin");
+    const isAdmin = user.role === "ADMIN";
+    if (!isAdmin) document.getElementById("formCard").style.display = "none";
+
+    const ROLE_LABELS = { SALES_REP: "Sales Rep", SALES_MANAGER: "Sales Manager", FINANCE: "Finance", ADMIN: "Admin" };
+
+    async function load() {
+        try {
+            const users = await DF.get("/api/users");
+            document.getElementById("rows").innerHTML = users.length ? users.map(u => `
+                <tr>
+                    <td>${DF.escapeHtml(u.fullName)}${u.username === user.username ? ' <span class="muted">(you)</span>' : ""}</td>
+                    <td>${DF.escapeHtml(u.username)}</td>
+                    <td>${DF.escapeHtml(u.email || "")}</td>
+                    <td><span class="badge">${ROLE_LABELS[u.role] || u.role}</span></td>
+                    <td><span class="badge ${u.active ? "badge-approved" : "badge-rejected"}">${u.active ? "Active" : "Deactivated"}</span></td>
+                    <td>
+                        ${isAdmin ? `
+                            <button class="btn-outline btn-sm" onclick="resetPassword(${u.id}, '${DF.escapeHtml(u.username)}')">Reset password</button>
+                            ${u.username === user.username ? "" : `<button class="btn-outline btn-sm" onclick="toggleActive(${u.id}, ${!u.active})">${u.active ? "Deactivate" : "Activate"}</button>`}
+                        ` : ""}
+                    </td>
+                </tr>
+            `).join("") : `<tr><td colspan="6" class="empty">No staff users yet.</td></tr>`;
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function createUser() {
+        DF.clearMessage("msg");
+        try {
+            await DF.post("/api/users", {
+                fullName: document.getElementById("uFullName").value,
+                email: document.getElementById("uEmail").value,
+                username: document.getElementById("uUsername").value,
+                password: document.getElementById("uPassword").value,
+                role: document.getElementById("uRole").value,
+                active: true
+            });
+            ["uFullName", "uEmail", "uUsername", "uPassword"].forEach(id => document.getElementById(id).value = "");
+            load();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function toggleActive(id, nextActive) {
+        DF.clearMessage("msg");
+        try {
+            const target = (await DF.get("/api/users")).find(u => u.id === id);
+            if (!target) return;
+            await DF.put(`/api/users/${id}`, {
+                fullName: target.fullName, email: target.email, role: target.role, active: nextActive
+            });
+            load();
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    async function resetPassword(id, username) {
+        DF.clearMessage("msg");
+        const newPassword = prompt(`New password for "${username}":`);
+        if (!newPassword) return;
+        try {
+            const target = (await DF.get("/api/users")).find(u => u.id === id);
+            if (!target) return;
+            await DF.put(`/api/users/${id}`, {
+                fullName: target.fullName, email: target.email, role: target.role, active: target.active, password: newPassword
+            });
+            alert("Password updated.");
+        } catch (e) { DF.showError("msg", e); }
+    }
+
+    load();
+</script>
+</body>
+</html>
